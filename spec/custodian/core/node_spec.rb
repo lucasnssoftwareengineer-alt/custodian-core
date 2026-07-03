@@ -50,5 +50,13 @@ RSpec.describe Custodian::Core::Node do
 
       expect(node.reload.subject).to eq(host_object)
     end
+
+    it "can be another Node, without any special-casing" do
+      ward = described_class.create!(demand_type: "binary")
+
+      custody_node = described_class.create!(demand_type: "binary", subject: ward)
+
+      expect(custody_node.reload.subject).to eq(ward)
+    end
   end
 end
