@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
+require "ancestry"
+
 module Custodian
   module Core
     class Node < ActiveRecord::Base
       self.table_name = "custodian_core_nodes"
+
+      has_ancestry
 
       DEMAND_TYPES = %w[binary fixed variable_manual variable_by_tag].freeze
 

@@ -28,4 +28,17 @@ RSpec.describe Custodian::Core::Node do
       expect(node.errors[:demand_value]).not_to be_empty
     end
   end
+
+  describe "ancestry" do
+    it "supports a tree of parents and children" do
+      root = described_class.create!(demand_type: "binary")
+      child = described_class.create!(demand_type: "binary", parent: root)
+      grandchild = described_class.create!(demand_type: "binary", parent: child)
+
+      expect(grandchild.root).to eq(root)
+      expect(root.children).to contain_exactly(child)
+      expect(root.subtree).to contain_exactly(root, child, grandchild)
+      expect(grandchild.ancestor_ids).to eq([root.id, child.id])
+    end
+  end
 end
