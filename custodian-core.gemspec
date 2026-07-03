@@ -10,10 +10,12 @@ Gem::Specification.new do |spec|
 
   spec.summary = "A domain-agnostic chain-of-custody engine for Ruby."
   spec.description = "Custodian::Core implements a generic chain-of-custody mechanism over a " \
-                      "tree of responsibilities. Concrete domains are implemented as satellite " \
-                      "gems that register actions into this core via a registry."
+                     "tree of responsibilities. Concrete domains are implemented as satellite " \
+                     "gems that register actions into this core via a registry."
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
+
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
