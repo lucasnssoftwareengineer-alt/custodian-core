@@ -31,8 +31,8 @@ Gem::Specification.new do |spec|
 
   # This gem is a Rails engine so that satellite gems can rely on it to ship
   # ActiveRecord models and migrations in later steps.
-  spec.add_dependency "rails", ">= 7.0"
   spec.add_dependency "ancestry", ">= 4.0"
+  spec.add_dependency "rails", ">= 7.0"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

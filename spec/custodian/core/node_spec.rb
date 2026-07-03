@@ -30,7 +30,7 @@ RSpec.describe Custodian::Core::Node do
   end
 
   describe "ancestry" do
-    it "supports a tree of parents and children" do
+    it "supports a tree of parents and children", :aggregate_failures do
       root = described_class.create!(demand_type: "binary")
       child = described_class.create!(demand_type: "binary", parent: root)
       grandchild = described_class.create!(demand_type: "binary", parent: child)

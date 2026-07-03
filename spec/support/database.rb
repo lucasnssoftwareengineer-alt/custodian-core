@@ -6,7 +6,7 @@ ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:"
 
 ActiveRecord::Migration.verbose = false
 
-Dir[File.expand_path("../../db/migrate/*.rb", __dir__)].sort.each { |f| require f }
+Dir[File.expand_path("../../db/migrate/*.rb", __dir__)].each { |f| require f }
 
 ActiveRecord::MigrationContext.new(
   File.expand_path("../../db/migrate", __dir__)

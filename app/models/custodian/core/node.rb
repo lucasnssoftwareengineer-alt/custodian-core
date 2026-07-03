@@ -4,7 +4,7 @@ require "ancestry"
 
 module Custodian
   module Core
-    class Node < ActiveRecord::Base
+    class Node < ApplicationRecord
       self.table_name = "custodian_core_nodes"
 
       has_ancestry

@@ -31,3 +31,7 @@ RSpec/ExampleLength:
 
 RSpec/MultipleExpectations:
   Max: 3
+
+Rails/ApplicationRecord:
+  Exclude:
+    - "spec/support/**/*"
