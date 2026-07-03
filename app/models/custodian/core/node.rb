@@ -16,6 +16,12 @@ module Custodian
       validates :demand_type, presence: true, inclusion: { in: DEMAND_TYPES }
       validate :demand_value_matches_demand_type
 
+      # Node deliberately has no graph_id column: graph membership is resolved
+      # via the ancestry root instead, to avoid an unused foreign key.
+      def graph
+        Graph.find_by(root_node: root)
+      end
+
       private
 
       def demand_value_matches_demand_type

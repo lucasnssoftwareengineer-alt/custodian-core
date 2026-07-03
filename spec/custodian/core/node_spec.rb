@@ -59,4 +59,22 @@ RSpec.describe Custodian::Core::Node do
       expect(custody_node.reload.subject).to eq(ward)
     end
   end
+
+  describe "#graph" do
+    it "returns the parent Graph for a leaf node at any depth" do
+      root = described_class.create!(demand_type: "binary")
+      child = described_class.create!(demand_type: "binary", parent: root)
+      leaf = described_class.create!(demand_type: "binary", parent: child)
+      graph = Custodian::Core::Graph.create!(root_node: root)
+
+      expect(leaf.graph).to eq(graph)
+    end
+
+    it "returns nil when the node's root is not referenced by any Graph" do
+      root = described_class.create!(demand_type: "binary")
+      leaf = described_class.create!(demand_type: "binary", parent: root)
+
+      expect(leaf.graph).to be_nil
+    end
+  end
 end
