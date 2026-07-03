@@ -9,6 +9,8 @@ module Custodian
 
       has_ancestry
 
+      belongs_to :subject, polymorphic: true, optional: true
+
       DEMAND_TYPES = %w[binary fixed variable_manual variable_by_tag].freeze
 
       validates :demand_type, presence: true, inclusion: { in: DEMAND_TYPES }

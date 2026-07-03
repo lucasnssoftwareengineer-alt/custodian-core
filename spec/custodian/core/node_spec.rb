@@ -41,4 +41,14 @@ RSpec.describe Custodian::Core::Node do
       expect(grandchild.ancestor_ids).to eq([root.id, child.id])
     end
   end
+
+  describe "polymorphic subject" do
+    it "can be associated to an arbitrary ActiveRecord class" do
+      host_object = DummyHostObject.create!
+
+      node = described_class.create!(demand_type: "binary", subject: host_object)
+
+      expect(node.reload.subject).to eq(host_object)
+    end
+  end
 end
