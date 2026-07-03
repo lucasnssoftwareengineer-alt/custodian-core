@@ -5,6 +5,7 @@ module Custodian
     class Graph < ApplicationRecord
       self.table_name = "custodian_core_graphs"
 
+      belongs_to :owner, polymorphic: true, optional: true
       belongs_to :root_node, class_name: "Custodian::Core::Node"
 
       validate :root_node_must_be_a_root
