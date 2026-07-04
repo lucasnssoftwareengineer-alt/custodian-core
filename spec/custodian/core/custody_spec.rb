@@ -63,5 +63,52 @@ RSpec.describe Custodian::Core::Custody do
         expect(custody.currently_valid?).to be true
       end
     end
+
+    context "when validity_type is fixed_term" do
+      it "is true within [valid_from, valid_until]" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "fixed_term",
+          valid_from: 1.day.ago, valid_until: 1.day.from_now
+        )
+
+        expect(custody.currently_valid?).to be true
+      end
+
+      it "is false before valid_from" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "fixed_term",
+          valid_from: 1.day.from_now, valid_until: 2.days.from_now
+        )
+
+        expect(custody.currently_valid?).to be false
+      end
+
+      it "is false after valid_until" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "fixed_term",
+          valid_from: 2.days.ago, valid_until: 1.day.ago
+        )
+
+        expect(custody.currently_valid?).to be false
+      end
+
+      it "treats a nil valid_from as unbounded on that side" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "fixed_term",
+          valid_from: nil, valid_until: 1.day.from_now
+        )
+
+        expect(custody.currently_valid?).to be true
+      end
+
+      it "treats a nil valid_until as unbounded on that side" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "fixed_term",
+          valid_from: 1.day.ago, valid_until: nil
+        )
+
+        expect(custody.currently_valid?).to be true
+      end
+    end
   end
 end

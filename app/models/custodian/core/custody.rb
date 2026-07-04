@@ -8,8 +8,13 @@ module Custodian
       belongs_to :custodian, polymorphic: true, optional: true
       belongs_to :ward, class_name: "Custodian::Core::Node"
 
-      def currently_valid?(_at_time = Time.current)
-        true if validity_type == "eternal"
+      def currently_valid?(at_time = Time.current)
+        case validity_type
+        when "eternal"
+          true
+        when "fixed_term"
+          (valid_from.nil? || at_time >= valid_from) && (valid_until.nil? || at_time <= valid_until)
+        end
       end
     end
   end
