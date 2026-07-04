@@ -49,4 +49,19 @@ RSpec.describe Custodian::Core::Custody do
       expect(custody.reload.action_params).to eq(params)
     end
   end
+
+  describe "#currently_valid?" do
+    let(:ward) { Custodian::Core::Node.create!(demand_type: "binary") }
+
+    context "when validity_type is eternal" do
+      it "is true regardless of any dates set" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "eternal",
+          valid_from: 10.years.ago, valid_until: 10.years.ago
+        )
+
+        expect(custody.currently_valid?).to be true
+      end
+    end
+  end
 end

@@ -7,6 +7,10 @@ module Custodian
 
       belongs_to :custodian, polymorphic: true, optional: true
       belongs_to :ward, class_name: "Custodian::Core::Node"
+
+      def currently_valid?(_at_time = Time.current)
+        true if validity_type == "eternal"
+      end
     end
   end
 end
