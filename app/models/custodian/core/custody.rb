@@ -23,10 +23,20 @@ module Custodian
         when "eternal"
           true
         when "fixed_term"
-          (valid_from.nil? || at_time >= valid_from) && (valid_until.nil? || at_time <= valid_until)
+          fixed_term_valid_at?(at_time)
         when "punctual"
-          valid_until.nil? || at_time <= valid_until
+          punctual_valid_at?(at_time)
         end
+      end
+
+      private
+
+      def fixed_term_valid_at?(at_time)
+        (valid_from.nil? || at_time >= valid_from) && (valid_until.nil? || at_time <= valid_until)
+      end
+
+      def punctual_valid_at?(at_time)
+        valid_until.nil? || at_time <= valid_until
       end
     end
   end

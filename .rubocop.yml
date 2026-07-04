@@ -35,3 +35,7 @@ RSpec/MultipleExpectations:
 Rails/ApplicationRecord:
   Exclude:
     - "spec/support/**/*"
+
+Metrics/MethodLength:
+  Exclude:
+    - "db/migrate/**/*"

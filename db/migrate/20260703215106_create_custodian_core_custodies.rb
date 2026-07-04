@@ -22,7 +22,8 @@ class CreateCustodianCoreCustodies < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :custodian_core_custodies, %i[custodian_type custodian_id], name: "index_custodian_core_custodies_on_custodian"
+    add_index :custodian_core_custodies, %i[custodian_type custodian_id],
+              name: "index_custodian_core_custodies_on_custodian"
     add_foreign_key :custodian_core_custodies, :custodian_core_nodes, column: :ward_id
   end
 end
