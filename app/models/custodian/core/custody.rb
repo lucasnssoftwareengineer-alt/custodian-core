@@ -24,6 +24,15 @@ module Custodian
         currently_valid?(at_time) && !at_risk?
       end
 
+      def healthcheck(at_time = Time.current)
+        return :broken if status == "broken"
+        return :expired if status == "expired"
+        return :expired unless currently_valid?(at_time)
+        return :at_risk if at_risk?
+
+        :active
+      end
+
       def currently_valid?(at_time = Time.current)
         return false if %w[broken expired].include?(status)
 

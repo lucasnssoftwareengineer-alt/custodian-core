@@ -200,4 +200,54 @@ RSpec.describe Custodian::Core::Custody do
       expect(custody.trustworthy?).to be true
     end
   end
+
+  describe "#healthcheck" do
+    it "returns :broken regardless of validity_type/dates when status is broken" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "broken"
+      )
+
+      expect(custody.healthcheck).to eq(:broken)
+    end
+
+    it "returns :expired when status is expired" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "expired"
+      )
+
+      expect(custody.healthcheck).to eq(:expired)
+    end
+
+    it "returns :expired when validity_type is fixed_term and time is past valid_until, " \
+       "even though status is still active" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "fixed_term",
+        valid_from: 2.days.ago, valid_until: 1.day.ago, status: "active"
+      )
+
+      expect(custody.status).to eq("active")
+      expect(custody.healthcheck).to eq(:expired)
+    end
+
+    it "returns :at_risk when status is at_risk and still within any time bounds" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "at_risk"
+      )
+
+      expect(custody.healthcheck).to eq(:at_risk)
+    end
+
+    it "returns :active when status is active and validity holds" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "active"
+      )
+
+      expect(custody.healthcheck).to eq(:active)
+    end
+  end
 end
