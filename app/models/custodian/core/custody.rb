@@ -16,6 +16,10 @@ module Custodian
       validates :validity_type, inclusion: { in: VALIDITY_TYPES }
       validates :status, inclusion: { in: STATUSES }
 
+      def at_risk?
+        status == "at_risk"
+      end
+
       def currently_valid?(at_time = Time.current)
         return false if %w[broken expired].include?(status)
 

@@ -151,4 +151,16 @@ RSpec.describe Custodian::Core::Custody do
       end
     end
   end
+
+  describe "#at_risk?" do
+    it "is true when status is at_risk, false for all other statuses" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+
+      %w[active at_risk broken expired].each do |status|
+        custody = described_class.create!(ward: ward, action_name: "notify", status: status)
+
+        expect(custody.at_risk?).to eq(status == "at_risk")
+      end
+    end
+  end
 end
