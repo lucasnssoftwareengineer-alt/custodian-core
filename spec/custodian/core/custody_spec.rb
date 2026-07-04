@@ -138,5 +138,17 @@ RSpec.describe Custodian::Core::Custody do
         expect(custody.currently_valid?).to be true
       end
     end
+
+    context "when status is broken or expired" do
+      it "is false even though validity_type/dates would otherwise say valid" do
+        %w[broken expired].each do |status|
+          custody = described_class.create!(
+            ward: ward, action_name: "notify", validity_type: "eternal", status: status
+          )
+
+          expect(custody.currently_valid?).to be false
+        end
+      end
+    end
   end
 end
