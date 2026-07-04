@@ -20,6 +20,10 @@ module Custodian
         status == "at_risk"
       end
 
+      def trustworthy?(at_time = Time.current)
+        currently_valid?(at_time) && !at_risk?
+      end
+
       def currently_valid?(at_time = Time.current)
         return false if %w[broken expired].include?(status)
 

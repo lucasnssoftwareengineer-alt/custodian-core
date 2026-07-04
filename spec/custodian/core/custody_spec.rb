@@ -163,4 +163,41 @@ RSpec.describe Custodian::Core::Custody do
       end
     end
   end
+
+  describe "#trustworthy?" do
+    it "is false when status is broken" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(ward: ward, action_name: "notify", validity_type: "eternal", status: "broken")
+
+      expect(custody.trustworthy?).to be false
+    end
+
+    it "is false when status is expired" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "expired"
+      )
+
+      expect(custody.trustworthy?).to be false
+    end
+
+    it "is false when status is at_risk, even though currently_valid? is true for the same Custody" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "at_risk"
+      )
+
+      expect(custody.currently_valid?).to be true
+      expect(custody.trustworthy?).to be false
+    end
+
+    it "is true when status is active and validity holds" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      custody = described_class.create!(
+        ward: ward, action_name: "notify", validity_type: "eternal", status: "active"
+      )
+
+      expect(custody.trustworthy?).to be true
+    end
+  end
 end
