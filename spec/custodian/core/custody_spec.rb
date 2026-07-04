@@ -110,5 +110,33 @@ RSpec.describe Custodian::Core::Custody do
         expect(custody.currently_valid?).to be true
       end
     end
+
+    context "when validity_type is punctual" do
+      it "is true at or before valid_until" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "punctual", valid_until: Time.current
+        )
+
+        expect(custody.currently_valid?(custody.valid_until)).to be true
+        expect(custody.currently_valid?(custody.valid_until - 1.hour)).to be true
+      end
+
+      it "is false after valid_until" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "punctual", valid_until: 1.day.ago
+        )
+
+        expect(custody.currently_valid?).to be false
+      end
+
+      it "ignores valid_from entirely" do
+        custody = described_class.create!(
+          ward: ward, action_name: "notify", validity_type: "punctual",
+          valid_from: 1.day.from_now, valid_until: 1.day.from_now
+        )
+
+        expect(custody.currently_valid?).to be true
+      end
+    end
   end
 end

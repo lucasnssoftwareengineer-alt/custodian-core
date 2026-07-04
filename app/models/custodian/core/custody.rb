@@ -14,6 +14,8 @@ module Custodian
           true
         when "fixed_term"
           (valid_from.nil? || at_time >= valid_from) && (valid_until.nil? || at_time <= valid_until)
+        when "punctual"
+          valid_until.nil? || at_time <= valid_until
         end
       end
     end
