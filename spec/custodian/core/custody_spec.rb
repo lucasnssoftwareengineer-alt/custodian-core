@@ -30,4 +30,23 @@ RSpec.describe Custodian::Core::Custody do
       expect(custody.reload.custodian).to eq(custodian_node)
     end
   end
+
+  describe "action_params" do
+    it "defaults to an empty hash" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+
+      custody = described_class.create!(ward: ward, action_name: "notify")
+
+      expect(custody.reload.action_params).to eq({})
+    end
+
+    it "round-trips arbitrary nested data through the database" do
+      ward = Custodian::Core::Node.create!(demand_type: "binary")
+      params = { "amount" => 42, "nested" => { "currency" => "BRL", "tags" => %w[a b] } }
+
+      custody = described_class.create!(ward: ward, action_name: "notify", action_params: params)
+
+      expect(custody.reload.action_params).to eq(params)
+    end
+  end
 end
