@@ -93,5 +93,32 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[node.id][:attempts]).to eq([])
       expect(result[node.id][:gap]).to eq(BigDecimal("100"))
     end
+
+    it "escalates a numeric child's unresolved shortfall into its parent's total_demand", :aggregate_failures do
+      parent = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 50)
+      child = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100, parent: parent)
+      custody = Custodian::Core::Custody.create!(ward: parent, action_name: "pay")
+      received_args = nil
+      Custodian::Core::ActionRegistry.register(:pay) do |n, c, remaining|
+        received_args = [n, c, remaining]
+        :resolved
+      end
+
+      result = described_class.resolve_tree(parent)
+
+      expect(result[parent.id][:demanded]).to eq(BigDecimal("150"))
+      expect(result[parent.id][:own_demand]).to eq(BigDecimal("50"))
+      expect(result[parent.id][:inherited_shortfall]).to eq(BigDecimal("100"))
+      expect(result[parent.id][:gap]).to eq(BigDecimal("0"))
+
+      expect(result[child.id][:gap]).to eq(BigDecimal("0"))
+      expect(result[child.id][:attempts]).to eq(
+        [{ custody_id: nil, action_name: nil, outcome: :resolved, via: :escalation }]
+      )
+
+      # Locks in the encapsulation design: the action sees ONE combined
+      # remaining figure, with no marker distinguishing own from inherited.
+      expect(received_args).to eq([parent, custody, BigDecimal("150")])
+    end
   end
 end

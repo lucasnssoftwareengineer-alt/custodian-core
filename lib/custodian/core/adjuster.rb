@@ -30,14 +30,26 @@ module Custodian
         def resolve_tree(root_node, strictness: :valid)
           nodes = root_node.subtree.to_a
           children_by_parent_id = nodes.group_by { |node| parent_id_of(node) }
+          parent_id_by_node_id = nodes.each_with_object({}) { |node, hash| hash[node.id] = parent_id_of(node) }
           custodies_by_ward_id = Custody.where(ward_id: nodes.map(&:id))
                                          .order(:priority_weight, :id)
                                          .group_by(&:ward_id)
 
           results = {}
+          inherited_shortfall_by_node_id = Hash.new(BigDecimal("0"))
+
           post_order(root_node, children_by_parent_id) do |node|
-            results[node.id] = resolve_node(node, custodies_by_ward_id[node.id] || [], strictness)
+            result = resolve_node(node, custodies_by_ward_id[node.id] || [], strictness,
+                                   inherited_shortfall_by_node_id[node.id])
+            results[node.id] = result
+
+            parent_id = parent_id_by_node_id[node.id]
+            if parent_id && !result[:binary] && result[:gap]&.positive?
+              inherited_shortfall_by_node_id[parent_id] += result[:gap]
+            end
           end
+
+          settle_numeric_escalations!(results, parent_id_by_node_id, root_node.id)
           results
         end
 
@@ -96,10 +108,11 @@ module Custodian
           (binary ? 1 : 0) + children.sum { |child| results[child.id][:unresolved_binary_count] }
         end
 
-        def resolve_node(node, custodies, strictness)
+        def resolve_node(node, custodies, strictness, inherited_shortfall)
           binary = node.demand_type == "binary"
           own_demand = binary ? nil : node.demand_value
-          remaining = own_demand || BigDecimal("0")
+          total_demand = (own_demand || BigDecimal("0")) + inherited_shortfall
+          remaining = total_demand
           attempts = []
 
           eligible_custodies(custodies, node, strictness).each do |custody|
@@ -119,16 +132,49 @@ module Custodian
           end
 
           {
-            demanded: binary ? nil : own_demand,
+            demanded: binary ? nil : total_demand,
             own_demand: own_demand,
-            inherited_shortfall: BigDecimal("0"),
-            resolved_amount: binary ? nil : (own_demand - remaining),
+            inherited_shortfall: inherited_shortfall,
+            resolved_amount: binary ? nil : (total_demand - remaining),
             gap: binary ? nil : remaining,
             binary: binary,
             binary_resolved: nil,
             pending_binaries_escalated: [],
             attempts: attempts
           }
+        end
+
+        # A numeric node that couldn't fully resolve its total_demand (own +
+        # already-inherited) has its shortfall folded into the parent's total
+        # DURING the main post-order pass (see resolve_tree). Whether that
+        # shortfall was EVER actually covered can only be known once we've
+        # walked all the way up: a node's escalation is "resolved" if any
+        # ancestor's own final gap is zero (that ancestor's custodies covered
+        # the whole combined pool, including this node's contribution).
+        def settle_numeric_escalations!(results, parent_id_by_node_id, root_id)
+          results.each do |node_id, result|
+            next if node_id == root_id
+            next if result[:binary]
+            next unless result[:gap]&.positive?
+
+            if ancestor_resolved?(node_id, parent_id_by_node_id, results)
+              result[:gap] = BigDecimal("0")
+              result[:attempts] << { custody_id: nil, action_name: nil, outcome: :resolved, via: :escalation }
+            else
+              result[:attempts] << { custody_id: nil, action_name: nil, outcome: :failed, via: :escalation }
+            end
+          end
+        end
+
+        def ancestor_resolved?(node_id, parent_id_by_node_id, results)
+          ancestor_id = parent_id_by_node_id[node_id]
+          while ancestor_id
+            ancestor_result = results[ancestor_id]
+            return true if !ancestor_result[:binary] && ancestor_result[:gap]&.zero?
+
+            ancestor_id = parent_id_by_node_id[ancestor_id]
+          end
+          false
         end
 
         # Custodies eligible to act on behalf of `node`: filtered by the
