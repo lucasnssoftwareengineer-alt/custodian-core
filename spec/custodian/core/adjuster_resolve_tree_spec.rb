@@ -161,5 +161,31 @@ RSpec.describe Custodian::Core::Adjuster do
       )
       expect(result[root.id][:attempts].none? { |a| a[:custody_id] == middle_custody.id }).to be true
     end
+
+    it "reports the final unresolved gap at the root when no custody anywhere resolves anything",
+       :aggregate_failures do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      child = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 20, parent: root)
+      root_custody = Custodian::Core::Custody.create!(ward: root, action_name: "try_root")
+      child_custody = Custodian::Core::Custody.create!(ward: child, action_name: "try_child")
+      Custodian::Core::ActionRegistry.register(:try_root) { |_n, _c, _remaining| :failed }
+      Custodian::Core::ActionRegistry.register(:try_child) { |_n, _c, _remaining| :failed }
+
+      result = described_class.resolve_tree(root)
+
+      expect(result[child.id][:gap]).to eq(BigDecimal("20"))
+      expect(result[child.id][:attempts]).to eq(
+        [
+          { custody_id: child_custody.id, action_name: "try_child", outcome: :failed, via: :direct },
+          { custody_id: nil, action_name: nil, outcome: :failed, via: :escalation }
+        ]
+      )
+
+      expect(result[root.id][:demanded]).to eq(BigDecimal("30"))
+      expect(result[root.id][:gap]).to eq(BigDecimal("30"))
+      expect(result[root.id][:attempts]).to eq(
+        [{ custody_id: root_custody.id, action_name: "try_root", outcome: :failed, via: :direct }]
+      )
+    end
   end
 end
