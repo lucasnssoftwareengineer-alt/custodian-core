@@ -65,4 +65,30 @@ RSpec.describe Custodian::Core::ActionRegistry do
         .to raise_error(Custodian::Core::ActionRegistry::NotRegisteredError, /ghost/)
     end
   end
+
+  describe "outcome validation" do
+    it "passes through :resolved, :failed, and a Numeric" do
+      [:resolved, :failed, 42.5].each do |outcome|
+        described_class.register(:action) { |_n, _c, _remaining| outcome }
+
+        expect(described_class.call(:action, node, custody, 0)).to eq(outcome)
+
+        described_class.unregister(:action)
+      end
+    end
+
+    it "raises InvalidOutcomeError naming the action and showing the invalid return value" do
+      [true, nil, "resolved"].each do |bad_outcome|
+        described_class.register(:action) { |_n, _c, _remaining| bad_outcome }
+
+        expect { described_class.call(:action, node, custody, 0) }
+          .to raise_error(Custodian::Core::ActionRegistry::InvalidOutcomeError) { |error|
+            expect(error.message).to include(":action")
+            expect(error.message).to include(bad_outcome.inspect)
+          }
+
+        described_class.unregister(:action)
+      end
+    end
+  end
 end

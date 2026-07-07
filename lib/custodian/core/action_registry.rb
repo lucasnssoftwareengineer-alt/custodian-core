@@ -5,6 +5,9 @@ module Custodian
     module ActionRegistry
       class AlreadyRegisteredError < Custodian::Core::Error; end
       class NotRegisteredError < Custodian::Core::Error; end
+      class InvalidOutcomeError < Custodian::Core::Error; end
+
+      VALID_SYMBOL_OUTCOMES = %i[resolved failed].freeze
 
       @registry = {}
       @mutex = Mutex.new
@@ -24,7 +27,9 @@ module Custodian
           block = @mutex.synchronize { @registry[name] }
           raise NotRegisteredError, "action #{name.inspect} is not registered" unless block
 
-          block.call(node, custody, remaining)
+          outcome = block.call(node, custody, remaining)
+          validate_outcome!(name, outcome)
+          outcome
         end
 
         def unregister(action_name)
@@ -44,6 +49,16 @@ module Custodian
         # in a before/around hook so each spec starts from a clean registry.
         def clear!
           @mutex.synchronize { @registry.clear }
+        end
+
+        private
+
+        def validate_outcome!(name, outcome)
+          return if VALID_SYMBOL_OUTCOMES.include?(outcome) || outcome.is_a?(Numeric)
+
+          raise InvalidOutcomeError,
+                "action #{name.inspect} returned an invalid outcome: #{outcome.inspect} " \
+                "(expected :resolved, :failed, or a Numeric)"
         end
       end
     end
