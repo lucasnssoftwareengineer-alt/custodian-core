@@ -27,6 +27,19 @@ module Custodian
           block.call(node, custody, remaining)
         end
 
+        def unregister(action_name)
+          name = action_name.to_sym
+          @mutex.synchronize do
+            raise NotRegisteredError, "action #{name.inspect} is not registered" unless @registry.key?(name)
+
+            @registry.delete(name)
+          end
+        end
+
+        def registered?(action_name)
+          @mutex.synchronize { @registry.key?(action_name.to_sym) }
+        end
+
         # Removes all registrations. Intended for test isolation: call this
         # in a before/around hook so each spec starts from a clean registry.
         def clear!

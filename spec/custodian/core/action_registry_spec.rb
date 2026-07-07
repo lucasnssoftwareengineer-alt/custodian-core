@@ -48,4 +48,21 @@ RSpec.describe Custodian::Core::ActionRegistry do
         .to raise_error(Custodian::Core::ActionRegistry::AlreadyRegisteredError, /notify/)
     end
   end
+
+  describe "#unregister" do
+    it "removes a registered action, flipping registered? to false and making call raise afterwards" do
+      described_class.register(:notify) { |_n, _c, _remaining| :resolved }
+
+      described_class.unregister(:notify)
+
+      expect(described_class.registered?(:notify)).to be false
+      expect { described_class.call(:notify, node, custody, 0) }
+        .to raise_error(Custodian::Core::ActionRegistry::NotRegisteredError, /notify/)
+    end
+
+    it "raises NotRegisteredError when unregistering an action that was never registered" do
+      expect { described_class.unregister(:ghost) }
+        .to raise_error(Custodian::Core::ActionRegistry::NotRegisteredError, /ghost/)
+    end
+  end
 end
