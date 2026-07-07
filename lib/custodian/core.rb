@@ -10,3 +10,4 @@ module Custodian
 end
 
 require_relative "core/action_registry"
+require_relative "core/adjuster"
