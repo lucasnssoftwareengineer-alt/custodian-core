@@ -40,14 +40,18 @@ module Custodian
         end
 
         def compute(node, children, results)
-          own_demand = node.demand_value
-          numeric_children_sum = children.sum(BigDecimal("0")) { |child| results[child.id][:aggregated_demand] }
+          binary = node.demand_type == "binary"
+          # Binary children are a magnitude firewall: their own aggregated_demand
+          # is nil and their numeric descendants never tunnel through them.
+          numeric_children = children.reject { |child| results[child.id][:binary] }
+          numeric_children_sum = numeric_children.sum(BigDecimal("0")) { |child| results[child.id][:aggregated_demand] }
+          unresolved_binary_count = (binary ? 1 : 0) + children.sum { |child| results[child.id][:unresolved_binary_count] }
 
           {
-            own_demand: own_demand,
-            aggregated_demand: own_demand + numeric_children_sum,
-            binary: false,
-            unresolved_binary_count: 0
+            own_demand: binary ? nil : node.demand_value,
+            aggregated_demand: binary ? nil : node.demand_value + numeric_children_sum,
+            binary: binary,
+            unresolved_binary_count: unresolved_binary_count
           }
         end
       end
