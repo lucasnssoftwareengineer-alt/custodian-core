@@ -58,5 +58,34 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[binary_parent.id][:aggregated_demand]).to be_nil
       expect(result[grandparent.id][:aggregated_demand]).to eq(BigDecimal("10"))
     end
+
+    it "computes the full Hash for every node in a mixed tree", :aggregate_failures do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      child_a = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 5, parent: root)
+      child_b = Custodian::Core::Node.create!(demand_type: "binary", parent: root)
+      child_c = Custodian::Core::Node.create!(demand_type: "binary", parent: root)
+      grandchild = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 999, parent: child_c)
+
+      result = described_class.aggregate_demand(root)
+
+      expect(result[grandchild.id]).to eq(
+        own_demand: BigDecimal("999"), aggregated_demand: BigDecimal("999"),
+        binary: false, unresolved_binary_count: 0
+      )
+      expect(result[child_a.id]).to eq(
+        own_demand: BigDecimal("5"), aggregated_demand: BigDecimal("5"),
+        binary: false, unresolved_binary_count: 0
+      )
+      expect(result[child_b.id]).to eq(
+        own_demand: nil, aggregated_demand: nil, binary: true, unresolved_binary_count: 1
+      )
+      expect(result[child_c.id]).to eq(
+        own_demand: nil, aggregated_demand: nil, binary: true, unresolved_binary_count: 1
+      )
+      expect(result[root.id]).to eq(
+        own_demand: BigDecimal("10"), aggregated_demand: BigDecimal("15"),
+        binary: false, unresolved_binary_count: 2
+      )
+    end
   end
 end
