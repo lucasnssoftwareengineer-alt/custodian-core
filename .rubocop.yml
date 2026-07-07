@@ -51,3 +51,15 @@ Metrics/ModuleLength:
 Metrics/ClassLength:
   Exclude:
     - "lib/custodian/core/adjuster.rb"
+
+# The full-tree integration spec deliberately builds one large, realistic
+# fixture (8 nodes, 9 custodies) to exercise every feature together in a
+# single scenario - many memoized helpers and a narrative string instead of
+# a class are both intentional here, not signs of a poorly scoped spec.
+RSpec/MultipleMemoizedHelpers:
+  Exclude:
+    - "spec/integration/**/*"
+
+RSpec/DescribeClass:
+  Exclude:
+    - "spec/integration/**/*"
