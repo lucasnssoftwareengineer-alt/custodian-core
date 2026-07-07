@@ -91,4 +91,26 @@ RSpec.describe Custodian::Core::ActionRegistry do
       end
     end
   end
+
+  describe "#registered?" do
+    it "returns true after registering and false before/after" do
+      expect(described_class.registered?(:notify)).to be false
+
+      described_class.register(:notify) { |_n, _c, _remaining| :resolved }
+
+      expect(described_class.registered?(:notify)).to be true
+    end
+  end
+
+  describe "#clear!" do
+    it "empties everything" do
+      described_class.register(:notify) { |_n, _c, _remaining| :resolved }
+      described_class.register(:store) { |_n, _c, _remaining| :resolved }
+
+      described_class.clear!
+
+      expect(described_class.registered?(:notify)).to be false
+      expect(described_class.registered?(:store)).to be false
+    end
+  end
 end
