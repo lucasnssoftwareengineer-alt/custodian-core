@@ -208,5 +208,21 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(received_args[2].keys).to contain_exactly(:siblings, :aggregation, :strictness)
       expect(received_args[2][:strictness]).to eq(:valid)
     end
+
+    it "mutates nothing: updated_at is untouched across all records", :aggregate_failures do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 50)
+      child = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100, parent: root)
+      custody = Custodian::Core::Custody.create!(ward: root, action_name: "pay")
+      Custodian::Core::ActionRegistry.register(:pay) { |_n, _c, _remaining| :resolved }
+      root_updated_at = root.reload.updated_at
+      child_updated_at = child.reload.updated_at
+      custody_updated_at = custody.reload.updated_at
+
+      described_class.resolve_tree(root)
+
+      expect(root.reload.updated_at).to eq(root_updated_at)
+      expect(child.reload.updated_at).to eq(child_updated_at)
+      expect(custody.reload.updated_at).to eq(custody_updated_at)
+    end
   end
 end
