@@ -18,5 +18,18 @@ RSpec.describe Custodian::Core::CustodyNodeRule do
       expect(rule).not_to be_valid
       expect(rule.errors[:rule_value]).not_to be_empty
     end
+
+    it "is valid with rule_type limit_pct and rule_value 50" do
+      rule = described_class.new(custody: custody, node: node, rule_type: "limit_pct", rule_value: 50)
+
+      expect(rule).to be_valid
+    end
+
+    it "is invalid with rule_type limit_pct and no rule_value" do
+      rule = described_class.new(custody: custody, node: node, rule_type: "limit_pct")
+
+      expect(rule).not_to be_valid
+      expect(rule.errors[:rule_value]).not_to be_empty
+    end
   end
 end
