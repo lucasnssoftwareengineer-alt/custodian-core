@@ -87,5 +87,16 @@ RSpec.describe Custodian::Core::Adjuster do
         binary: false, unresolved_binary_count: 2
       )
     end
+
+    it "runs within a fixed small number of queries regardless of tree size (no N+1)" do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 1)
+      20.times do
+        Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 1, parent: root)
+      end
+
+      query_count = count_queries { described_class.aggregate_demand(root) }
+
+      expect(query_count).to be <= 3
+    end
   end
 end
