@@ -11,6 +11,7 @@ module Custodian
       belongs_to :node, class_name: "Custodian::Core::Node"
 
       validates :rule_type, inclusion: { in: RULE_TYPES }
+      validates :custody_id, uniqueness: { scope: :node_id }
       validate :rule_value_matches_rule_type
       validate :rule_value_within_percentage_bounds
 

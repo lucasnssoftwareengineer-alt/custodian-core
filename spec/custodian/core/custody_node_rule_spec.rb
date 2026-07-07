@@ -41,4 +41,22 @@ RSpec.describe Custodian::Core::CustodyNodeRule do
       end
     end
   end
+
+  describe "uniqueness of [custody, node]" do
+    it "rejects a duplicate rule for the same custody/node pair at the model level" do
+      described_class.create!(custody: custody, node: node, rule_type: "exclude")
+      duplicate = described_class.new(custody: custody, node: node, rule_type: "full")
+
+      expect(duplicate).not_to be_valid
+      expect(duplicate.errors[:custody_id]).not_to be_empty
+    end
+
+    it "rejects a duplicate rule for the same custody/node pair at the database level, " \
+       "even when model validation is skipped" do
+      described_class.create!(custody: custody, node: node, rule_type: "exclude")
+      duplicate = described_class.new(custody: custody, node: node, rule_type: "full")
+
+      expect { duplicate.save!(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
+    end
+  end
 end
