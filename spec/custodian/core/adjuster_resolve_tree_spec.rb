@@ -187,5 +187,26 @@ RSpec.describe Custodian::Core::Adjuster do
         [{ custody_id: root_custody.id, action_name: "try_root", outcome: :failed, via: :direct }]
       )
     end
+
+    it "runs a registered phase between direct custodies and escalation, recording it as via: :phase",
+       :aggregate_failures do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      received_args = nil
+      Custodian::Core::Adjuster.register_phase(:sibling_generosity, lambda do |n, remaining, context|
+        received_args = [n, remaining, context]
+        :resolved
+      end)
+
+      result = described_class.resolve_tree(node)
+
+      expect(result[node.id][:gap]).to eq(BigDecimal("0"))
+      expect(result[node.id][:attempts]).to eq(
+        [{ custody_id: nil, action_name: :sibling_generosity, outcome: :resolved, via: :phase }]
+      )
+      expect(received_args[0]).to eq(node)
+      expect(received_args[1]).to eq(BigDecimal("100"))
+      expect(received_args[2].keys).to contain_exactly(:siblings, :aggregation, :strictness)
+      expect(received_args[2][:strictness]).to eq(:valid)
+    end
   end
 end

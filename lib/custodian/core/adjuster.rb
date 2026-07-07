@@ -34,6 +34,7 @@ module Custodian
           custodies_by_ward_id = Custody.where(ward_id: nodes.map(&:id))
                                          .order(:priority_weight, :id)
                                          .group_by(&:ward_id)
+          aggregation = aggregate_demand(root_node)
 
           results = {}
           inherited_shortfall_by_node_id = Hash.new(BigDecimal("0"))
@@ -42,9 +43,11 @@ module Custodian
           post_order(root_node, children_by_parent_id) do |node|
             custodies = custodies_by_ward_id[node.id] || []
             pending_binaries = pending_binaries_by_node_id[node.id]
+            siblings = (children_by_parent_id[parent_id_by_node_id[node.id]] || []) - [node]
+            context = { siblings: siblings, aggregation: aggregation, strictness: strictness }
 
             result = resolve_node(node, custodies, strictness, inherited_shortfall_by_node_id[node.id],
-                                   pending_binaries, results)
+                                   pending_binaries, results, context)
             results[node.id] = result
 
             parent_id = parent_id_by_node_id[node.id]
@@ -118,14 +121,14 @@ module Custodian
           (binary ? 1 : 0) + children.sum { |child| results[child.id][:unresolved_binary_count] }
         end
 
-        def resolve_node(node, custodies, strictness, inherited_shortfall, pending_binaries, results)
+        def resolve_node(node, custodies, strictness, inherited_shortfall, pending_binaries, results, context)
           binary = node.demand_type == "binary"
           own_demand = binary ? nil : node.demand_value
           total_demand = (own_demand || BigDecimal("0")) + inherited_shortfall
           attempts = []
 
-          binary_resolved = binary ? resolve_own_binary(node, custodies, strictness, attempts) : nil
-          remaining = resolve_numeric_pool(node, custodies, strictness, total_demand, attempts)
+          binary_resolved = binary ? resolve_own_binary(node, custodies, strictness, attempts, context) : nil
+          remaining = resolve_numeric_pool(node, custodies, strictness, total_demand, attempts, context)
           pending_ids = resolve_pending_binaries(custodies, strictness, pending_binaries, results)
 
           {
@@ -143,17 +146,18 @@ module Custodian
 
         # A binary node has no magnitude: only :resolved settles it. :failed
         # and any Numeric outcome are both treated as "not yet", try the next
-        # custody.
-        def resolve_own_binary(node, custodies, strictness, attempts)
+        # custody. Phases run afterwards, same rule, if still unresolved.
+        def resolve_own_binary(node, custodies, strictness, attempts, context)
           eligible_custodies(custodies, node, strictness).each do |custody|
             outcome = ActionRegistry.call(custody.action_name, node, custody, nil)
             attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
             return true if outcome == :resolved
           end
-          false
+
+          run_phases(node, nil, context, attempts) { |outcome| outcome == :resolved }
         end
 
-        def resolve_numeric_pool(node, custodies, strictness, total_demand, attempts)
+        def resolve_numeric_pool(node, custodies, strictness, total_demand, attempts, context)
           remaining = total_demand
           return remaining unless remaining.positive?
 
@@ -161,18 +165,41 @@ module Custodian
             outcome = ActionRegistry.call(custody.action_name, node, custody, remaining)
             attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
 
-            case outcome
-            when :resolved
-              remaining = BigDecimal("0")
-              break
-            when :failed
-              next
-            else
-              remaining -= outcome
-            end
+            remaining = apply_outcome(remaining, outcome)
             break if remaining.zero?
           end
+
+          return remaining if remaining.zero?
+
+          run_phases(node, remaining, context, attempts) do |outcome|
+            remaining = apply_outcome(remaining, outcome)
+            remaining.zero?
+          end
           remaining
+        end
+
+        def apply_outcome(remaining, outcome)
+          case outcome
+          when :resolved then BigDecimal("0")
+          when :failed then remaining
+          else remaining - outcome
+          end
+        end
+
+        # Runs registered phases, in registration order, between direct
+        # custodies and escalation. Each phase's outcome is validated with
+        # the exact same rule ActionRegistry.call uses. Stops at the first
+        # phase whose result satisfies the block's "done?" check.
+        def run_phases(node, remaining, context, attempts)
+          @phases.each do |phase|
+            outcome = phase[:handler].call(node, remaining, context)
+            ActionRegistry.validate_outcome!(phase[:name], outcome)
+            attempts << { custody_id: nil, action_name: phase[:name], outcome: outcome, via: :phase }
+
+            done = yield(outcome)
+            return done if done
+          end
+          false
         end
 
         # Pending binaries inherited from children: this node's OWN custodies

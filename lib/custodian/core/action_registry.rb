@@ -51,8 +51,10 @@ module Custodian
           @mutex.synchronize { @registry.clear }
         end
 
-        private
-
+        # Public so callers outside the registry (e.g. Adjuster's phase
+        # hook) can validate an outcome using the exact same rule that
+        # governs actions invoked through #call: :resolved, :failed, or a
+        # non-negative Numeric.
         def validate_outcome!(name, outcome)
           return if VALID_SYMBOL_OUTCOMES.include?(outcome)
 
