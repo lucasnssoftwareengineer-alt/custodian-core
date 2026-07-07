@@ -98,5 +98,28 @@ RSpec.describe Custodian::Core::Adjuster do
 
       expect(query_count).to be <= 3
     end
+
+    it "does exact BigDecimal arithmetic, never Float" do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: "0.1")
+      Custodian::Core::Node.create!(demand_type: "fixed", demand_value: "0.2", parent: root)
+
+      result = described_class.aggregate_demand(root)
+
+      expect(result[root.id][:aggregated_demand]).to eq(BigDecimal("0.3"))
+      expect(result[root.id][:aggregated_demand]).to be_a(BigDecimal)
+      expect(0.1 + 0.2).not_to eq(0.3) # sanity check: Float arithmetic would have failed this
+    end
+
+    it "does not mutate any record (updated_at is untouched)" do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      child = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 5, parent: root)
+      root_updated_at = root.reload.updated_at
+      child_updated_at = child.reload.updated_at
+
+      described_class.aggregate_demand(root)
+
+      expect(root.reload.updated_at).to eq(root_updated_at)
+      expect(child.reload.updated_at).to eq(child_updated_at)
+    end
   end
 end
