@@ -20,5 +20,17 @@ RSpec.describe Custodian::Core::Adjuster do
 
       expect(result[root.id][:aggregated_demand]).to eq(BigDecimal("22"))
     end
+
+    it "aggregates a three-level numeric tree post-order (middle level before root)" do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 1)
+      middle = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 2, parent: root)
+      Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 3, parent: middle)
+      Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 4, parent: middle)
+
+      result = described_class.aggregate_demand(root)
+
+      expect(result[middle.id][:aggregated_demand]).to eq(BigDecimal("9"))
+      expect(result[root.id][:aggregated_demand]).to eq(BigDecimal("10"))
+    end
   end
 end
