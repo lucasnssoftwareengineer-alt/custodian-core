@@ -54,7 +54,17 @@ module Custodian
         private
 
         def validate_outcome!(name, outcome)
-          return if VALID_SYMBOL_OUTCOMES.include?(outcome) || outcome.is_a?(Numeric)
+          return if VALID_SYMBOL_OUTCOMES.include?(outcome)
+
+          if outcome.is_a?(Numeric)
+            # An action must not INCREASE demand: a negative Numeric would mean
+            # partial resolution made things worse, which is never valid.
+            return if outcome >= 0
+
+            raise InvalidOutcomeError,
+                  "action #{name.inspect} returned a negative Numeric outcome: #{outcome.inspect} " \
+                  "(an action must not increase demand; Numeric outcomes must be >= 0)"
+          end
 
           raise InvalidOutcomeError,
                 "action #{name.inspect} returned an invalid outcome: #{outcome.inspect} " \

@@ -93,6 +93,13 @@ RSpec.describe Custodian::Core::ActionRegistry do
         described_class.unregister(:action)
       end
     end
+
+    it "raises InvalidOutcomeError when a Numeric outcome is negative (an action must not increase demand)" do
+      described_class.register(:action) { |_n, _c, _remaining| -5 }
+
+      expect { described_class.call(:action, node, custody, 0) }
+        .to raise_error(Custodian::Core::ActionRegistry::InvalidOutcomeError, /-5/)
+    end
   end
 
   describe "#registered?" do
