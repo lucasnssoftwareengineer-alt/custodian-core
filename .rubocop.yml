@@ -39,3 +39,15 @@ Rails/ApplicationRecord:
 Metrics/MethodLength:
   Exclude:
     - "db/migrate/**/*"
+
+# Adjuster implements the tree-resolution algorithm (custodies, escalation,
+# phases) as one deliberately cohesive unit, per its design doc; every
+# individual method is kept small (see Metrics/MethodLength/AbcSize/
+# ParameterLists, all passing here) - only the module's total size is large.
+Metrics/ModuleLength:
+  Exclude:
+    - "lib/custodian/core/adjuster.rb"
+
+Metrics/ClassLength:
+  Exclude:
+    - "lib/custodian/core/adjuster.rb"

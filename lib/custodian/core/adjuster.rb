@@ -28,42 +28,14 @@ module Custodian
         # mutates any Node/Custody record. Actions themselves may have side
         # effects; that is their business, not the Adjuster's.
         def resolve_tree(root_node, strictness: :valid)
-          nodes = root_node.subtree.to_a
-          children_by_parent_id = nodes.group_by { |node| parent_id_of(node) }
-          parent_id_by_node_id = nodes.each_with_object({}) { |node, hash| hash[node.id] = parent_id_of(node) }
-          custodies_by_ward_id = Custody.where(ward_id: nodes.map(&:id))
-                                         .order(:priority_weight, :id)
-                                         .group_by(&:ward_id)
-          aggregation = aggregate_demand(root_node)
+          state = build_resolution_state(root_node, strictness)
 
-          results = {}
-          inherited_shortfall_by_node_id = Hash.new(BigDecimal("0"))
-          pending_binaries_by_node_id = Hash.new { |hash, key| hash[key] = [] }
-
-          post_order(root_node, children_by_parent_id) do |node|
-            custodies = custodies_by_ward_id[node.id] || []
-            pending_binaries = pending_binaries_by_node_id[node.id]
-            siblings = (children_by_parent_id[parent_id_by_node_id[node.id]] || []) - [node]
-            context = { siblings: siblings, aggregation: aggregation, strictness: strictness }
-
-            result = resolve_node(node, custodies, strictness, inherited_shortfall_by_node_id[node.id],
-                                   pending_binaries, results, context)
-            results[node.id] = result
-
-            parent_id = parent_id_by_node_id[node.id]
-            next unless parent_id
-
-            if !result[:binary] && result[:gap]&.positive?
-              inherited_shortfall_by_node_id[parent_id] += result[:gap]
-            end
-            pending_binaries_by_node_id[parent_id] << node if result[:binary] && !result[:binary_resolved]
-            pending_binaries_by_node_id[parent_id].concat(
-              pending_binaries.reject { |pending_node| results[pending_node.id][:binary_resolved] }
-            )
+          post_order(root_node, state[:children_by_parent_id]) do |node|
+            resolve_and_escalate(node, state)
           end
 
-          settle_numeric_escalations!(results, parent_id_by_node_id, root_node.id)
-          results
+          settle_numeric_escalations!(state[:results], state[:parent_id_by_node_id], root_node.id)
+          state[:results]
         end
 
         # Computes, for every node in root_node's subtree, its consolidated
@@ -121,34 +93,118 @@ module Custodian
           (binary ? 1 : 0) + children.sum { |child| results[child.id][:unresolved_binary_count] }
         end
 
-        def resolve_node(node, custodies, strictness, inherited_shortfall, pending_binaries, results, context)
-          binary = node.demand_type == "binary"
-          own_demand = binary ? nil : node.demand_value
-          total_demand = (own_demand || BigDecimal("0")) + inherited_shortfall
-          attempts = []
+        # ------------------------------------------------------------------
+        # resolve_tree bookkeeping
+        # ------------------------------------------------------------------
 
-          binary_resolved = binary ? resolve_own_binary(node, custodies, strictness, attempts, context) : nil
-          remaining = resolve_numeric_pool(node, custodies, strictness, total_demand, attempts, context)
-          pending_ids = resolve_pending_binaries(custodies, strictness, pending_binaries, results)
+        def build_resolution_state(root_node, strictness)
+          nodes = root_node.subtree.to_a
 
           {
-            demanded: binary ? nil : total_demand,
-            own_demand: own_demand,
-            inherited_shortfall: inherited_shortfall,
-            resolved_amount: binary ? nil : (total_demand - remaining),
-            gap: binary ? nil : remaining,
-            binary: binary,
-            binary_resolved: binary_resolved,
-            pending_binaries_escalated: pending_ids,
-            attempts: attempts
+            strictness: strictness,
+            results: {},
+            children_by_parent_id: nodes.group_by { |node| parent_id_of(node) },
+            parent_id_by_node_id: nodes.to_h { |node| [node.id, parent_id_of(node)] },
+            custodies_by_ward_id: custodies_by_ward_id(nodes),
+            aggregation: aggregate_demand(root_node)
+          }.merge(empty_accumulators)
+        end
+
+        def empty_accumulators
+          {
+            inherited_shortfall_by_node_id: Hash.new(BigDecimal("0")),
+            pending_binaries_by_node_id: Hash.new { |hash, key| hash[key] = [] }
           }
+        end
+
+        def custodies_by_ward_id(nodes)
+          Custody.where(ward_id: nodes.map(&:id)).order(:priority_weight, :id).group_by(&:ward_id)
+        end
+
+        def resolve_and_escalate(node, state)
+          pending_binaries = state[:pending_binaries_by_node_id][node.id]
+
+          result = resolve_node(node, state, pending_binaries)
+          state[:results][node.id] = result
+
+          escalate(node, result, pending_binaries, state)
+        end
+
+        def escalate(node, result, pending_binaries, state)
+          parent_id = state[:parent_id_by_node_id][node.id]
+          return unless parent_id
+
+          escalate_numeric_shortfall(result, parent_id, state)
+          escalate_binary_pending(node, result, pending_binaries, parent_id, state)
+        end
+
+        def escalate_numeric_shortfall(result, parent_id, state)
+          return if result[:binary] || !result[:gap]&.positive?
+
+          state[:inherited_shortfall_by_node_id][parent_id] += result[:gap]
+        end
+
+        def escalate_binary_pending(node, result, pending_binaries, parent_id, state)
+          pending = state[:pending_binaries_by_node_id][parent_id]
+          pending << node if result[:binary] && !result[:binary_resolved]
+          pending.concat(pending_binaries.reject { |p| state[:results][p.id][:binary_resolved] })
+        end
+
+        # ------------------------------------------------------------------
+        # Per-node resolution
+        # ------------------------------------------------------------------
+
+        def resolve_node(node, state, pending_binaries)
+          binary = node.demand_type == "binary"
+          own_demand, inherited_shortfall, total_demand = demand_figures(node, binary, state)
+          attempts = []
+          figures = { binary: binary, total_demand: total_demand }
+
+          binary_resolved, remaining, pending_ids =
+            attempt_resolution(node, figures, pending_binaries, state, attempts)
+
+          numeric_view(binary, total_demand, remaining).merge(
+            own_demand: own_demand, inherited_shortfall: inherited_shortfall, binary: binary,
+            binary_resolved: binary_resolved, pending_binaries_escalated: pending_ids, attempts: attempts
+          )
+        end
+
+        def attempt_resolution(node, figures, pending_binaries, state, attempts)
+          eligible = eligible_for(node, state)
+          context = resolution_context(node, state)
+          binary_resolved = figures[:binary] ? resolve_own_binary(node, eligible, attempts, context) : nil
+          remaining = resolve_numeric_pool(node, eligible, figures[:total_demand], attempts, context)
+          pending_ids = resolve_pending_binaries(eligible, pending_binaries, state[:results])
+          [binary_resolved, remaining, pending_ids]
+        end
+
+        def demand_figures(node, binary, state)
+          own_demand = binary ? nil : node.demand_value
+          inherited_shortfall = state[:inherited_shortfall_by_node_id][node.id]
+          [own_demand, inherited_shortfall, (own_demand || BigDecimal("0")) + inherited_shortfall]
+        end
+
+        def eligible_for(node, state)
+          custodies = state[:custodies_by_ward_id][node.id] || []
+          custodies.select { |custody| valid_under_strictness?(custody, state[:strictness]) }
+        end
+
+        def resolution_context(node, state)
+          siblings = (state[:children_by_parent_id][state[:parent_id_by_node_id][node.id]] || []) - [node]
+          { siblings: siblings, aggregation: state[:aggregation], strictness: state[:strictness] }
+        end
+
+        def numeric_view(binary, total_demand, remaining)
+          return { demanded: nil, resolved_amount: nil, gap: nil } if binary
+
+          { demanded: total_demand, resolved_amount: total_demand - remaining, gap: remaining }
         end
 
         # A binary node has no magnitude: only :resolved settles it. :failed
         # and any Numeric outcome are both treated as "not yet", try the next
         # custody. Phases run afterwards, same rule, if still unresolved.
-        def resolve_own_binary(node, custodies, strictness, attempts, context)
-          eligible_custodies(custodies, node, strictness).each do |custody|
+        def resolve_own_binary(node, eligible, attempts, context)
+          eligible.select { |custody| custody.applies_to?(node) }.each do |custody|
             outcome = ActionRegistry.call(custody.action_name, node, custody, nil)
             attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
             return true if outcome == :resolved
@@ -157,23 +213,26 @@ module Custodian
           run_phases(node, nil, context, attempts) { |outcome| outcome == :resolved }
         end
 
-        def resolve_numeric_pool(node, custodies, strictness, total_demand, attempts, context)
+        def resolve_numeric_pool(node, eligible, total_demand, attempts, context)
           remaining = total_demand
           return remaining unless remaining.positive?
 
-          eligible_custodies(custodies, node, strictness).each do |custody|
-            outcome = ActionRegistry.call(custody.action_name, node, custody, remaining)
-            attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
-
-            remaining = apply_outcome(remaining, outcome)
-            break if remaining.zero?
-          end
-
+          remaining = try_numeric_custodies(node, eligible, remaining, attempts)
           return remaining if remaining.zero?
 
           run_phases(node, remaining, context, attempts) do |outcome|
             remaining = apply_outcome(remaining, outcome)
             remaining.zero?
+          end
+          remaining
+        end
+
+        def try_numeric_custodies(node, eligible, remaining, attempts)
+          eligible.select { |custody| custody.applies_to?(node) }.each do |custody|
+            outcome = ActionRegistry.call(custody.action_name, node, custody, remaining)
+            attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
+            remaining = apply_outcome(remaining, outcome)
+            break if remaining.zero?
           end
           remaining
         end
@@ -209,23 +268,27 @@ module Custodian
         # consulted belongs to the node currently being processed (its
         # custodian is acting on the pending node's behalf). The attempt is
         # recorded on the PENDING NODE's own attempts, not this node's.
-        def resolve_pending_binaries(custodies, strictness, pending_binaries, results)
+        def resolve_pending_binaries(eligible, pending_binaries, results)
           pending_binaries.map do |pending_node|
-            resolved = false
-            eligible_custodies(custodies, pending_node, strictness).each do |custody|
-              outcome = ActionRegistry.call(custody.action_name, pending_node, custody, nil)
-              results[pending_node.id][:attempts] << {
-                custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :escalation
-              }
-              if outcome == :resolved
-                resolved = true
-                break
-              end
-            end
-            results[pending_node.id][:binary_resolved] = resolved
+            results[pending_node.id][:binary_resolved] = resolve_pending_binary?(eligible, pending_node, results)
             pending_node.id
           end
         end
+
+        def resolve_pending_binary?(eligible, pending_node, results)
+          eligible.select { |custody| custody.applies_to?(pending_node) }.each do |custody|
+            outcome = ActionRegistry.call(custody.action_name, pending_node, custody, nil)
+            results[pending_node.id][:attempts] << {
+              custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :escalation
+            }
+            return true if outcome == :resolved
+          end
+          false
+        end
+
+        # ------------------------------------------------------------------
+        # Numeric escalation settlement (see resolve_tree)
+        # ------------------------------------------------------------------
 
         # A numeric node that couldn't fully resolve its total_demand (own +
         # already-inherited) has its shortfall folded into the parent's total
@@ -236,16 +299,18 @@ module Custodian
         # the whole combined pool, including this node's contribution).
         def settle_numeric_escalations!(results, parent_id_by_node_id, root_id)
           results.each do |node_id, result|
-            next if node_id == root_id
-            next if result[:binary]
-            next unless result[:gap]&.positive?
+            next if node_id == root_id || result[:binary] || !result[:gap]&.positive?
 
-            if ancestor_resolved?(node_id, parent_id_by_node_id, results)
-              result[:gap] = BigDecimal("0")
-              result[:attempts] << { custody_id: nil, action_name: nil, outcome: :resolved, via: :escalation }
-            else
-              result[:attempts] << { custody_id: nil, action_name: nil, outcome: :failed, via: :escalation }
-            end
+            settle_one_escalation!(node_id, result, parent_id_by_node_id, results)
+          end
+        end
+
+        def settle_one_escalation!(node_id, result, parent_id_by_node_id, results)
+          if ancestor_resolved?(node_id, parent_id_by_node_id, results)
+            result[:gap] = BigDecimal("0")
+            result[:attempts] << { custody_id: nil, action_name: nil, outcome: :resolved, via: :escalation }
+          else
+            result[:attempts] << { custody_id: nil, action_name: nil, outcome: :failed, via: :escalation }
           end
         end
 
@@ -258,17 +323,6 @@ module Custodian
             ancestor_id = parent_id_by_node_id[ancestor_id]
           end
           false
-        end
-
-        # Custodies eligible to act on behalf of `node`: filtered by the
-        # caller's chosen strictness (:valid = legal validity only,
-        # :trustworthy = also honor risk signals), and by whether the
-        # custody actually applies to this specific node (excludes
-        # repudiations and "exclude" rules; see Custody#applies_to?).
-        def eligible_custodies(custodies, node, strictness)
-          custodies.select do |custody|
-            valid_under_strictness?(custody, strictness) && custody.applies_to?(node)
-          end
         end
 
         def valid_under_strictness?(custody, strictness)
