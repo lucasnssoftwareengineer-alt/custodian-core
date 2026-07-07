@@ -52,5 +52,19 @@ RSpec.describe Custodian::Core::Adjuster do
 
       expect(result[node.id][:attempts].map { |a| a[:custody_id] }).to eq([older.id, newer.id])
     end
+
+    it "accumulates partial Numeric outcomes from multiple custodies until fully resolved" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      Custodian::Core::Custody.create!(ward: node, action_name: "pay_a", priority_weight: 1)
+      Custodian::Core::Custody.create!(ward: node, action_name: "pay_b", priority_weight: 2)
+      Custodian::Core::ActionRegistry.register(:pay_a) { |_n, _c, remaining| [remaining, 60].min }
+      Custodian::Core::ActionRegistry.register(:pay_b) { |_n, _c, remaining| remaining }
+
+      result = described_class.resolve_tree(node)
+
+      expect(result[node.id][:gap]).to eq(BigDecimal("0"))
+      expect(result[node.id][:resolved_amount]).to eq(BigDecimal("100"))
+      expect(result[node.id][:attempts].map { |a| a[:outcome] }).to eq([60, 40])
+    end
   end
 end
