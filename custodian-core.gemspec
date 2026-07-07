@@ -6,12 +6,14 @@ Gem::Specification.new do |spec|
   spec.name = "custodian-core"
   spec.version = Custodian::Core::VERSION
   spec.authors = ["lucasnshuntervoa"]
-  spec.email = ["lucas.ns.software.engineer@gmail.com"]
+  spec.email = ["lucas.ns.software.engineer@gmail.com"] # TODO: author to replace with a permanent address before publishing
 
   spec.summary = "A domain-agnostic chain-of-custody engine for Ruby."
-  spec.description = "Custodian::Core implements a generic chain-of-custody mechanism over a " \
-                     "tree of responsibilities. Concrete domains are implemented as satellite " \
-                     "gems that register actions into this core via a registry."
+  spec.description = "Custodian::Core resolves a chain of custody over a tree of responsibilities: " \
+                     "it identifies the next responsible party and demands the action a previous " \
+                     "ward could not fulfill, climbing the tree until someone can act. It carries " \
+                     "no business rules from any specific domain - concrete domains are implemented " \
+                     "as satellite gems that register actions into this core via a registry."
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 
