@@ -250,4 +250,32 @@ RSpec.describe Custodian::Core::Custody do
       expect(custody.healthcheck).to eq(:active)
     end
   end
+
+  describe "#applies_to?" do
+    let(:ward) { Custodian::Core::Node.create!(demand_type: "binary") }
+    let(:custody) { described_class.create!(ward: ward, action_name: "notify") }
+    let(:node) { Custodian::Core::Node.create!(demand_type: "binary", parent: ward) }
+
+    it "returns false for a repudiated node" do
+      Custodian::Core::CustodyRepudiatedNode.create!(custody: custody, node: node)
+
+      expect(custody.applies_to?(node)).to be false
+    end
+
+    it "returns false for a node with an exclude rule" do
+      Custodian::Core::CustodyNodeRule.create!(custody: custody, node: node, rule_type: "exclude")
+
+      expect(custody.applies_to?(node)).to be false
+    end
+
+    it "returns true for a node with a limit_pct rule (limits qualify, they don't exclude)" do
+      Custodian::Core::CustodyNodeRule.create!(custody: custody, node: node, rule_type: "limit_pct", rule_value: 50)
+
+      expect(custody.applies_to?(node)).to be true
+    end
+
+    it "returns true for an unrelated node with no rule and no repudiation" do
+      expect(custody.applies_to?(node)).to be true
+    end
+  end
 end

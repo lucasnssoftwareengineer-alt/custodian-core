@@ -11,10 +11,24 @@ module Custodian
       belongs_to :custodian, polymorphic: true, optional: true
       belongs_to :ward, class_name: "Custodian::Core::Node"
 
+      has_many :node_rules, class_name: "Custodian::Core::CustodyNodeRule", dependent: :destroy
+      has_many :repudiated_nodes, class_name: "Custodian::Core::CustodyRepudiatedNode", dependent: :destroy
+
       validates :action_name, presence: true
       validates :priority_weight, numericality: { only_integer: true }
       validates :validity_type, inclusion: { in: VALIDITY_TYPES }
       validates :status, inclusion: { in: STATUSES }
+
+      # Answers only the exclusion question: is this node repudiated, or does
+      # it have an "exclude" rule? It does NOT interpret limit_pct/limit_amount
+      # rule values (i.e. it doesn't decide how much of the demand applies) -
+      # that quantitative interpretation is the Adjuster's job, in a later step.
+      def applies_to?(node)
+        return false if repudiated_nodes.exists?(node: node)
+        return false if node_rules.exists?(node: node, rule_type: "exclude")
+
+        true
+      end
 
       def at_risk?
         status == "at_risk"
