@@ -12,6 +12,7 @@ module Custodian
 
       validates :rule_type, inclusion: { in: RULE_TYPES }
       validate :rule_value_matches_rule_type
+      validate :rule_value_within_percentage_bounds
 
       scope :for_node, ->(node) { where(node: node) }
 
@@ -23,6 +24,14 @@ module Custodian
         elsif rule_value.nil?
           errors.add(:rule_value, "can't be blank when rule_type is #{rule_type}")
         end
+      end
+
+      def rule_value_within_percentage_bounds
+        return unless rule_type == "limit_pct" && rule_value.present?
+
+        return if rule_value.positive? && rule_value <= 100
+
+        errors.add(:rule_value, "must be greater than 0 and less than or equal to 100 for limit_pct")
       end
     end
   end
