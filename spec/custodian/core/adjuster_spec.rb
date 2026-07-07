@@ -47,5 +47,16 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[root.id][:aggregated_demand]).to eq(BigDecimal("10"))
       expect(result[root.id][:unresolved_binary_count]).to eq(1)
     end
+
+    it "does not let a numeric grandchild's demand tunnel through a binary parent to the numeric grandparent" do
+      grandparent = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      binary_parent = Custodian::Core::Node.create!(demand_type: "binary", parent: grandparent)
+      Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 999, parent: binary_parent)
+
+      result = described_class.aggregate_demand(grandparent)
+
+      expect(result[binary_parent.id][:aggregated_demand]).to be_nil
+      expect(result[grandparent.id][:aggregated_demand]).to eq(BigDecimal("10"))
+    end
   end
 end
