@@ -66,5 +66,32 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[node.id][:resolved_amount]).to eq(BigDecimal("100"))
       expect(result[node.id][:attempts].map { |a| a[:outcome] }).to eq([60, 40])
     end
+
+    it "consults an at_risk custody under :valid but skips it under :trustworthy" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      custody = Custodian::Core::Custody.create!(ward: node, action_name: "pay", status: "at_risk")
+      Custodian::Core::ActionRegistry.register(:pay) { |_n, _c, _remaining| :resolved }
+
+      valid_result = described_class.resolve_tree(node, strictness: :valid)
+      expect(valid_result[node.id][:attempts]).to eq(
+        [{ custody_id: custody.id, action_name: "pay", outcome: :resolved, via: :direct }]
+      )
+
+      trustworthy_result = described_class.resolve_tree(node, strictness: :trustworthy)
+      expect(trustworthy_result[node.id][:attempts]).to eq([])
+      expect(trustworthy_result[node.id][:gap]).to eq(BigDecimal("100"))
+    end
+
+    it "does not consult a custody that does not apply_to? the node (e.g. repudiated)" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      custody = Custodian::Core::Custody.create!(ward: node, action_name: "pay")
+      Custodian::Core::CustodyRepudiatedNode.create!(custody: custody, node: node)
+      Custodian::Core::ActionRegistry.register(:pay) { |_n, _c, _remaining| :resolved }
+
+      result = described_class.resolve_tree(node)
+
+      expect(result[node.id][:attempts]).to eq([])
+      expect(result[node.id][:gap]).to eq(BigDecimal("100"))
+    end
   end
 end

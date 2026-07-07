@@ -96,13 +96,13 @@ module Custodian
           (binary ? 1 : 0) + children.sum { |child| results[child.id][:unresolved_binary_count] }
         end
 
-        def resolve_node(node, custodies, _strictness)
+        def resolve_node(node, custodies, strictness)
           binary = node.demand_type == "binary"
           own_demand = binary ? nil : node.demand_value
           remaining = own_demand || BigDecimal("0")
           attempts = []
 
-          custodies.each do |custody|
+          eligible_custodies(custodies, node, strictness).each do |custody|
             outcome = ActionRegistry.call(custody.action_name, node, custody, remaining)
             attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
 
@@ -129,6 +129,24 @@ module Custodian
             pending_binaries_escalated: [],
             attempts: attempts
           }
+        end
+
+        # Custodies eligible to act on behalf of `node`: filtered by the
+        # caller's chosen strictness (:valid = legal validity only,
+        # :trustworthy = also honor risk signals), and by whether the
+        # custody actually applies to this specific node (excludes
+        # repudiations and "exclude" rules; see Custody#applies_to?).
+        def eligible_custodies(custodies, node, strictness)
+          custodies.select do |custody|
+            valid_under_strictness?(custody, strictness) && custody.applies_to?(node)
+          end
+        end
+
+        def valid_under_strictness?(custody, strictness)
+          case strictness
+          when :valid then custody.currently_valid?
+          when :trustworthy then custody.trustworthy?
+          end
         end
       end
     end
