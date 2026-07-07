@@ -137,5 +137,29 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[child.id][:binary_resolved]).to be true
       expect(result[parent.id][:pending_binaries_escalated]).to eq([child.id])
     end
+
+    it "keeps the grandparent unaware of the grandchild once the middle node resolves everything",
+       :aggregate_failures do
+      root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      middle = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 20, parent: root)
+      leaf = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 30, parent: middle)
+      root_custody = Custodian::Core::Custody.create!(ward: root, action_name: "root_pay")
+      middle_custody = Custodian::Core::Custody.create!(ward: middle, action_name: "middle_pay")
+      Custodian::Core::ActionRegistry.register(:root_pay) { |_n, _c, _remaining| :resolved }
+      Custodian::Core::ActionRegistry.register(:middle_pay) { |_n, _c, _remaining| :resolved }
+
+      result = described_class.resolve_tree(root)
+
+      expect(result[leaf.id][:gap]).to eq(BigDecimal("0"))
+      expect(result[middle.id][:demanded]).to eq(BigDecimal("50"))
+      expect(result[middle.id][:gap]).to eq(BigDecimal("0"))
+
+      expect(result[root.id][:inherited_shortfall]).to eq(BigDecimal("0"))
+      expect(result[root.id][:demanded]).to eq(BigDecimal("10"))
+      expect(result[root.id][:attempts]).to eq(
+        [{ custody_id: root_custody.id, action_name: "root_pay", outcome: :resolved, via: :direct }]
+      )
+      expect(result[root.id][:attempts].none? { |a| a[:custody_id] == middle_custody.id }).to be true
+    end
   end
 end
