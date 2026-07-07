@@ -8,3 +8,5 @@ module Custodian
     class Error < StandardError; end
   end
 end
+
+require_relative "core/action_registry"
