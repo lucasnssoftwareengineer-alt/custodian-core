@@ -2,9 +2,12 @@
 
 RSpec.describe Custodian::Core::ActionRegistry do
   # The registry is transport, not logic: it doesn't care what node/custody
-  # actually are, so plain doubles are enough to prove arguments pass through.
+  # actually are, so plain (deliberately unverified) doubles are enough to
+  # prove arguments pass through untouched.
+  # rubocop:disable RSpec/VerifiedDoubles
   let(:node) { double("node") }
   let(:custody) { double("custody") }
+  # rubocop:enable RSpec/VerifiedDoubles
 
   around do |example|
     described_class.clear!
