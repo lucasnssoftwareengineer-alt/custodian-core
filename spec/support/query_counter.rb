@@ -6,7 +6,7 @@ module QueryCounter
   # only the queries the code under test actually issues.
   def count_queries(&block)
     count = 0
-    ignored_names = ["SCHEMA", "TRANSACTION"]
+    ignored_names = %w[SCHEMA TRANSACTION]
 
     subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
       count += 1 unless ignored_names.include?(payload[:name])
