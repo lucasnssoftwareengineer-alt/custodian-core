@@ -34,4 +34,18 @@ RSpec.describe Custodian::Core::ActionRegistry do
       expect(result).to eq(:resolved)
     end
   end
+
+  describe "error handling" do
+    it "raises NotRegisteredError, naming the action, when calling an unregistered name" do
+      expect { described_class.call(:ghost, node, custody, 0) }
+        .to raise_error(Custodian::Core::ActionRegistry::NotRegisteredError, /ghost/)
+    end
+
+    it "raises AlreadyRegisteredError, naming the action, when registering the same name twice" do
+      described_class.register(:notify) { |_n, _c, _remaining| :resolved }
+
+      expect { described_class.register(:notify) { |_n, _c, _remaining| :resolved } }
+        .to raise_error(Custodian::Core::ActionRegistry::AlreadyRegisteredError, /notify/)
+    end
+  end
 end
