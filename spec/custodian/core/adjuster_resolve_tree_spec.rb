@@ -120,5 +120,22 @@ RSpec.describe Custodian::Core::Adjuster do
       # remaining figure, with no marker distinguishing own from inherited.
       expect(received_args).to eq([parent, custody, BigDecimal("150")])
     end
+
+    it "escalates an unresolved binary child, invoking the parent's custody on the child's behalf" do
+      parent = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 0)
+      child = Custodian::Core::Node.create!(demand_type: "binary", parent: parent)
+      custody = Custodian::Core::Custody.create!(ward: parent, action_name: "approve")
+      received_args = nil
+      Custodian::Core::ActionRegistry.register(:approve) do |n, c, remaining|
+        received_args = [n, c, remaining]
+        :resolved
+      end
+
+      result = described_class.resolve_tree(parent)
+
+      expect(received_args).to eq([child, custody, nil])
+      expect(result[child.id][:binary_resolved]).to be true
+      expect(result[parent.id][:pending_binaries_escalated]).to eq([child.id])
+    end
   end
 end
