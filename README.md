@@ -11,6 +11,10 @@ vocabulary — no money, no storage, no networking — only the shape of
 responsibility and the machinery to walk it. Concrete domains plug in as
 satellite gems.
 
+> ⚠️ **Early-stage (0.1.0).** The API may still change and this gem has not
+> yet been battle-tested in production. It is provided "as is", without
+> warranty of any kind (see [License](#license)). Use at your own risk.
+
 ## Vocabulary
 
 - **Node** — something that needs to be resolved: the **ward**. Nodes form
@@ -72,6 +76,24 @@ Anything else — `true`, `nil`, a `String`, a negative number — raises
 `ActionRegistry::InvalidOutcomeError` immediately. See
 [ADR 0008](docs/adr/0008-registry-defensiveness.md) for why this is
 deliberately strict rather than forgiving.
+
+## Security: action registration is a trust boundary
+
+Registered actions and phase handlers are ordinary Ruby blocks that
+`custodian-core` executes with your application's full privileges. The core
+validates only the *shape* of what an action returns — it does **not**
+sandbox what an action does. Treat registration as privileged
+configuration:
+
+- Register actions only from code you control (your app, or satellite gems
+  you trust). Never build or register an action from untrusted input.
+- Never derive an `action_name` to invoke, or an action's body, from
+  user-supplied data without validating it against a fixed allowlist of
+  known actions.
+- `action_params` on a `Custody` is passed to the action as-is; validate
+  and authorize any host-exposed path that lets an end user set
+  `action_name`, `action_params`, or custody attributes, since those
+  determine what code runs and on whose behalf.
 
 ## Resolution order and encapsulation
 
@@ -137,7 +159,14 @@ Planned extensions that do not exist in this gem yet:
 
 ## Installation
 
-Add to your host Rails application's Gemfile:
+This gem is not published to RubyGems yet. While it lives on GitHub only,
+add it to your host Rails application's Gemfile via git:
+
+```ruby
+gem "custodian-core", git: "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
+```
+
+Once it is published to RubyGems, this becomes simply:
 
 ```ruby
 gem "custodian-core"
