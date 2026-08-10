@@ -5,9 +5,11 @@ require_relative "lib/custodian/core/version"
 Gem::Specification.new do |spec|
   spec.name = "custodian-core"
   spec.version = Custodian::Core::VERSION
-  spec.authors = ["lucasnshuntervoa"]
-  spec.email = ["lucas.ns.software.engineer@gmail.com"] # TODO: author to replace with a permanent address before publishing
-
+  spec.authors = ["Lucas Nunes De Sousa"]
+  spec.email = ["lucas.ns.software.engineer@gmail.com"] 
+  spec.homepage = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
+  spec.metadata["source_code_uri"] = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
+  spec.metadata["changelog_uri"] = "https://github.com/lucasnssoftwareengineer-alt/custodian-core/blob/main/CHANGELOG.md"
   spec.summary = "A domain-agnostic chain-of-custody engine for Ruby."
   spec.description = "Custodian::Core resolves a chain of custody over a tree of responsibilities: " \
                      "it identifies the next responsible party and demands the action a previous " \
