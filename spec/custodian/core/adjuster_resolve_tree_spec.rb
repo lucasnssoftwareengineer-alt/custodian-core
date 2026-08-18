@@ -67,6 +67,23 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[node.id][:attempts].pluck(:outcome)).to eq([60, 40])
     end
 
+    it "rejects an outcome larger than remaining instead of producing a negative gap" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      Custodian::Core::Custody.create!(ward: node, action_name: "overpay")
+      Custodian::Core::ActionRegistry.register(:overpay) { |_n, _c, _remaining| 101 }
+
+      expect { described_class.resolve_tree(node) }
+        .to raise_error(Custodian::Core::ActionRegistry::InvalidOutcomeError, /exceeding remaining demand/)
+    end
+
+    it "rejects persisted negative demand that bypassed model validation" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
+      node.update_column(:demand_value, -1) # rubocop:disable Rails/SkipsModelValidations -- deliberate corruption
+
+      expect { described_class.resolve_tree(node.reload) }
+        .to raise_error(ArgumentError, /total demand must be non-negative/)
+    end
+
     it "consults an at_risk custody under :valid but skips it under :trustworthy" do
       node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 100)
       custody = Custodian::Core::Custody.create!(ward: node, action_name: "pay", status: "at_risk")
@@ -80,6 +97,22 @@ RSpec.describe Custodian::Core::Adjuster do
       trustworthy_result = described_class.resolve_tree(node, strictness: :trustworthy)
       expect(trustworthy_result[node.id][:attempts]).to eq([])
       expect(trustworthy_result[node.id][:gap]).to eq(BigDecimal("100"))
+    end
+
+    it "accepts exactly the supported strictness symbols" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 0)
+
+      expect { described_class.resolve_tree(node, strictness: :valid) }.not_to raise_error
+      expect { described_class.resolve_tree(node, strictness: :trustworthy) }.not_to raise_error
+    end
+
+    it "rejects unsupported strictness values immediately" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 0)
+
+      [:unknown, "valid", nil].each do |strictness|
+        expect { described_class.resolve_tree(node, strictness: strictness) }
+          .to raise_error(ArgumentError, /unsupported strictness #{Regexp.escape(strictness.inspect)}/)
+      end
     end
 
     it "does not consult a custody that does not apply_to? the node (e.g. repudiated)" do
@@ -232,6 +265,39 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(received_args[1]).to eq(BigDecimal("100"))
       expect(received_args[2].keys).to contain_exactly(:siblings, :aggregation, :strictness)
       expect(received_args[2][:strictness]).to eq(:valid)
+    end
+
+    it "uses one phase snapshot for a resolution while phases are changed concurrently" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      phase_started, phase_registered = Array.new(2) { Queue.new }
+      described_class.register_phase(:initial, lambda do |_node, _remaining, _context|
+        phase_started << true
+        phase_registered.pop
+        :failed
+      end)
+      mutator = Thread.new do
+        phase_started.pop
+        described_class.register_phase(:late, ->(_node, _remaining, _context) { :failed })
+        phase_registered << true
+      end
+
+      result = described_class.resolve_tree(node)
+      mutator.join
+
+      expect(result[node.id][:attempts].pluck(:action_name)).to eq([:initial])
+    end
+
+    it "does not corrupt phase state under concurrent registrations" do
+      node = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
+      names = 20.times.map { |index| :"phase_#{index}" }
+      threads = names.map do |name|
+        Thread.new { described_class.register_phase(name, ->(_node, _remaining, _context) { :failed }) }
+      end
+      threads.each(&:join)
+
+      attempted_names = described_class.resolve_tree(node)[node.id][:attempts].pluck(:action_name)
+
+      expect(attempted_names).to match_array(names)
     end
 
     it "mutates nothing: updated_at is untouched across all records", :aggregate_failures do

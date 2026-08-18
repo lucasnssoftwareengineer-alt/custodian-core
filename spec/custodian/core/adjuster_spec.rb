@@ -33,6 +33,20 @@ RSpec.describe Custodian::Core::Adjuster do
       expect(result[root.id][:aggregated_demand]).to eq(BigDecimal("10"))
     end
 
+    it "aggregates a deep tree without depending on the Ruby call stack" do
+      node_class = Struct.new(:id, :ancestry, :demand_type, :demand_value, :subtree)
+      nodes = 10_000.times.map do |index|
+        ancestry = index.zero? ? nil : index.to_s
+        node_class.new(index + 1, ancestry, "fixed", BigDecimal("1"), nil)
+      end
+      nodes.first.subtree = nodes
+
+      result = described_class.aggregate_demand(nodes.first)
+
+      expect(result[nodes.first.id][:aggregated_demand]).to eq(BigDecimal("10000"))
+      expect(result[nodes.last.id][:aggregated_demand]).to eq(BigDecimal("1"))
+    end
+
     it "excludes a binary leaf's magnitude from the numeric parent's sum, but counts it", :aggregate_failures do
       root = Custodian::Core::Node.create!(demand_type: "fixed", demand_value: 10)
       binary_leaf = Custodian::Core::Node.create!(demand_type: "binary", parent: root)

@@ -5,7 +5,10 @@ require "bigdecimal"
 module Custodian
   module Core
     module Adjuster
+      VALID_STRICTNESS_VALUES = %i[valid trustworthy].freeze
+
       @phases = []
+      @phases_mutex = Mutex.new
 
       class << self
         # Registers a resolution phase, run (in registration order) between
@@ -13,12 +16,14 @@ module Custodian
         # This is the extension point a future sibling-generosity satellite
         # plugs into; this step only builds the hook, not any phase itself.
         def register_phase(name, handler)
-          @phases << { name: name, handler: handler }
+          @phases_mutex.synchronize do
+            @phases << { name: name, handler: handler }.freeze
+          end
         end
 
         # Removes all registered phases. Intended for test isolation.
         def clear_phases!
-          @phases = []
+          @phases_mutex.synchronize { @phases = [] }
         end
 
         # Walks root_node's subtree post-order (leaves first), invoking
@@ -28,6 +33,7 @@ module Custodian
         # mutates any Node/Custody record. Actions themselves may have side
         # effects; that is their business, not the Adjuster's.
         def resolve_tree(root_node, strictness: :valid)
+          validate_strictness!(strictness)
           state = build_resolution_state(root_node, strictness)
 
           post_order(root_node, state[:children_by_parent_id]) do |node|
@@ -67,8 +73,19 @@ module Custodian
         end
 
         def post_order(node, children_by_parent_id, &block)
-          (children_by_parent_id[node.id] || []).each { |child| post_order(child, children_by_parent_id, &block) }
-          block.call(node)
+          stack = [[node, false]]
+
+          until stack.empty?
+            current, visited = stack.pop
+            next block.call(current) if visited
+
+            enqueue_for_post_order(stack, current, children_by_parent_id)
+          end
+        end
+
+        def enqueue_for_post_order(stack, node, children_by_parent_id)
+          stack << [node, true]
+          (children_by_parent_id[node.id] || []).reverse_each { |child| stack << [child, false] }
         end
 
         def compute(node, children, results)
@@ -106,7 +123,8 @@ module Custodian
             children_by_parent_id: nodes.group_by { |node| parent_id_of(node) },
             parent_id_by_node_id: nodes.to_h { |node| [node.id, parent_id_of(node)] },
             custodies_by_ward_id: custodies_by_ward_id(nodes),
-            aggregation: aggregate_demand(root_node)
+            aggregation: aggregate_demand(root_node),
+            phases: phases_snapshot
           }.merge(empty_accumulators)
         end
 
@@ -172,8 +190,10 @@ module Custodian
         def attempt_resolution(node, figures, pending_binaries, state, attempts)
           eligible = eligible_for(node, state)
           context = resolution_context(node, state)
-          binary_resolved = figures[:binary] ? resolve_own_binary(node, eligible, attempts, context) : nil
-          remaining = resolve_numeric_pool(node, eligible, figures[:total_demand], attempts, context)
+          phases = state[:phases]
+          binary_resolved = figures[:binary] ? resolve_own_binary(node, eligible, attempts, context, phases) : nil
+          runtime = { context: context, phases: phases }
+          remaining = resolve_numeric_pool(node, eligible, figures[:total_demand], attempts, runtime)
           pending_ids = resolve_pending_binaries(eligible, pending_binaries, state[:results])
           [binary_resolved, remaining, pending_ids]
         end
@@ -203,28 +223,35 @@ module Custodian
         # A binary node has no magnitude: only :resolved settles it. :failed
         # and any Numeric outcome are both treated as "not yet", try the next
         # custody. Phases run afterwards, same rule, if still unresolved.
-        def resolve_own_binary(node, eligible, attempts, context)
+        def resolve_own_binary(node, eligible, attempts, context, phases)
           eligible.select { |custody| custody.applies_to?(node) }.each do |custody|
             outcome = ActionRegistry.call(custody.action_name, node, custody, nil)
             attempts << { custody_id: custody.id, action_name: custody.action_name, outcome: outcome, via: :direct }
             return true if outcome == :resolved
           end
 
-          run_phases(node, nil, context, attempts) { |outcome| outcome == :resolved }
+          run_phases(node, nil, context, attempts, phases) { |outcome| outcome == :resolved }
         end
 
-        def resolve_numeric_pool(node, eligible, total_demand, attempts, context)
+        def resolve_numeric_pool(node, eligible, total_demand, attempts, runtime)
+          validate_total_demand!(total_demand)
           remaining = total_demand
           return remaining unless remaining.positive?
 
           remaining = try_numeric_custodies(node, eligible, remaining, attempts)
           return remaining if remaining.zero?
 
-          run_phases(node, remaining, context, attempts) do |outcome|
+          run_phases(node, remaining, runtime[:context], attempts, runtime[:phases]) do |outcome|
             remaining = apply_outcome(remaining, outcome)
             remaining.zero?
           end
           remaining
+        end
+
+        def validate_total_demand!(total_demand)
+          return unless total_demand.negative?
+
+          raise ArgumentError, "total demand must be non-negative, got #{total_demand.inspect}"
         end
 
         def try_numeric_custodies(node, eligible, remaining, attempts)
@@ -249,8 +276,8 @@ module Custodian
         # custodies and escalation. Each phase's outcome is validated with
         # the exact same rule ActionRegistry.call uses. Stops at the first
         # phase whose result satisfies the block's "done?" check.
-        def run_phases(node, remaining, context, attempts)
-          @phases.each do |phase|
+        def run_phases(node, remaining, context, attempts, phases)
+          phases.each do |phase|
             outcome = phase[:handler].call(node, remaining, context)
             ActionRegistry.validate_outcome!(phase[:name], outcome, remaining: remaining)
             attempts << { custody_id: nil, action_name: phase[:name], outcome: outcome, via: :phase }
@@ -330,6 +357,17 @@ module Custodian
           when :valid then custody.currently_valid?
           when :trustworthy then custody.trustworthy?
           end
+        end
+
+        def validate_strictness!(strictness)
+          return if VALID_STRICTNESS_VALUES.include?(strictness)
+
+          raise ArgumentError,
+                "unsupported strictness #{strictness.inspect}; expected one of #{VALID_STRICTNESS_VALUES.inspect}"
+        end
+
+        def phases_snapshot
+          @phases_mutex.synchronize { @phases.dup.freeze }
         end
       end
     end
