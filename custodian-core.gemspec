@@ -5,7 +5,7 @@ require_relative "lib/custodian/core/version"
 Gem::Specification.new do |spec|
   spec.name = "custodian-core"
   spec.version = Custodian::Core::VERSION
-  spec.authors = ["Lucas"]
+  spec.authors = ["Lucas nunes de sousa"]
   spec.email = ["lucas.ns.software.engineer@gmail.com"]
   spec.homepage = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
   spec.metadata["source_code_uri"] = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
