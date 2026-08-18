@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
                      "no business rules from any specific domain - concrete domains are implemented " \
                      "as satellite gems that register actions into this core via a registry."
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["rubygems_mfa_required"] = "true"
 
@@ -40,11 +40,11 @@ Gem::Specification.new do |spec|
   # rather than the "rails" umbrella gem, to avoid pulling in ActionMailer,
   # ActionCable, ActionText, ActiveStorage, ActionView, Nokogiri, etc. into a
   # domain-agnostic core (see docs/adr/0001-domain-agnostic-core.md).
-  spec.add_dependency "actionpack", ">= 7.0"
-  spec.add_dependency "activerecord", ">= 7.0"
-  spec.add_dependency "activesupport", ">= 7.0"
-  spec.add_dependency "ancestry", ">= 4.0"
-  spec.add_dependency "railties", ">= 7.0"
+  spec.add_dependency "actionpack", ">= 7.0", "< 9.0"
+  spec.add_dependency "activerecord", ">= 7.0", "< 9.0"
+  spec.add_dependency "activesupport", ">= 7.0", "< 9.0"
+  spec.add_dependency "ancestry", ">= 4.0", "< 6.0"
+  spec.add_dependency "railties", ">= 7.0", "< 9.0"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

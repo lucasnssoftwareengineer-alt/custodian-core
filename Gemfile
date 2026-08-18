@@ -5,6 +5,15 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in custodian-core.gemspec
 gemspec
 
+if ENV["RAILS_VERSION"]
+  gem "actionpack", ENV.fetch("RAILS_VERSION")
+  gem "activerecord", ENV.fetch("RAILS_VERSION")
+  gem "activesupport", ENV.fetch("RAILS_VERSION")
+  gem "railties", ENV.fetch("RAILS_VERSION")
+end
+
+gem "ancestry", ENV.fetch("ANCESTRY_VERSION") if ENV["ANCESTRY_VERSION"]
+
 gem "rake", "~> 13.0"
 gem "rspec", "~> 3.13"
 gem "rubocop", "~> 1.65"

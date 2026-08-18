@@ -159,6 +159,12 @@ Planned extensions that do not exist in this gem yet:
 
 ## Installation
 
+### Compatibility
+
+`custodian-core` 0.1 supports Ruby 3.2 or newer, Rails 7.x and 8.x, and
+`ancestry` 4.x and 5.x. The lower Ruby bound keeps the supported runtime
+aligned with the CI matrix and with the currently supported Rails majors.
+
 This gem is not published to RubyGems yet. While it lives on GitHub only,
 add it to your host Rails application's Gemfile via git:
 
