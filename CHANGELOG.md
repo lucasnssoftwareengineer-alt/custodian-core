@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+- Require Ruby 3.2+, support Rails 7.x/8.x and ancestry 4.x/5.x explicitly.
+- Reject negative demands and non-finite, negative, or over-remaining numeric
+  action outcomes.
+- Validate resolution strictness, snapshot phases safely across threads, and
+  traverse deep trees iteratively.
+- Limit the built gem to consumer-facing code, migrations, signatures, and
+  top-level release documentation.
+
 ## [0.1.0] - 2026-07-07
 
 Initial release: a domain-agnostic chain-of-custody engine over a tree of

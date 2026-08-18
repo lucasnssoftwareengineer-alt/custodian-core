@@ -5,8 +5,8 @@ require_relative "lib/custodian/core/version"
 Gem::Specification.new do |spec|
   spec.name = "custodian-core"
   spec.version = Custodian::Core::VERSION
-  spec.authors = ["Lucas Nunes De Sousa"]
-  spec.email = ["lucas.ns.software.engineer@gmail.com"] 
+  spec.authors = ["Lucas"]
+  spec.email = ["lucas.ns.software.engineer@gmail.com"]
   spec.homepage = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
   spec.metadata["source_code_uri"] = "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
   spec.metadata["changelog_uri"] = "https://github.com/lucasnssoftwareengineer-alt/custodian-core/blob/main/CHANGELOG.md"
@@ -21,13 +21,12 @@ Gem::Specification.new do |spec|
 
   spec.metadata["rubygems_mfa_required"] = "true"
 
-  # Specify which files should be added to the gem when it is released.
-  # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
+  # Keep the package independent from Git and deliberately limited to files
+  # useful to consumers. Development configuration, specs, CI, and internal
+  # architecture records remain in the repository but not in the gem.
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z`.split("\x0").reject do |f|
-      (File.expand_path(f) == __FILE__) ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .circleci appveyor Gemfile])
-    end
+    %w[CHANGELOG.md LICENSE.txt README.md custodian-core.gemspec] +
+      Dir.glob(%w[app/**/*.rb db/**/*.rb lib/**/*.rb sig/**/*.rbs])
   end
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
