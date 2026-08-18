@@ -8,4 +8,39 @@
 /tmp/
 /Gemfile.lock
 /.rspec_status
+
+# Environment / secrets
+/.env
+/.env.*
+!/.env.example
+
+# AI / agent state
+/.agents/
+/.codex/
+
+# Logs
+*.log
+
+# IDE / editor
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials / keys
+*.pem
+*.key
+*.p12
+master.key
+
+# Local data / backups
+*.bak
+*.dump
+*.sql
+
+# Internal sessions
 /sessoes/
