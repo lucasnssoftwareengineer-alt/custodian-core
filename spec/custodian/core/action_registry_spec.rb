@@ -70,11 +70,11 @@ RSpec.describe Custodian::Core::ActionRegistry do
   end
 
   describe "outcome validation" do
-    it "passes through :resolved, :failed, and a Numeric" do
-      [:resolved, :failed, 42.5].each do |outcome|
+    it "passes through symbols and finite Numeric outcomes within the remaining demand" do
+      [:resolved, :failed, 0, 42.5, 100].each do |outcome|
         described_class.register(:action) { |_n, _c, _remaining| outcome }
 
-        expect(described_class.call(:action, node, custody, 0)).to eq(outcome)
+        expect(described_class.call(:action, node, custody, 100)).to eq(outcome)
 
         described_class.unregister(:action)
       end
@@ -94,11 +94,15 @@ RSpec.describe Custodian::Core::ActionRegistry do
       end
     end
 
-    it "raises InvalidOutcomeError when a Numeric outcome is negative (an action must not increase demand)" do
-      described_class.register(:action) { |_n, _c, _remaining| -5 }
+    it "rejects negative, non-finite, and over-remaining Numeric outcomes" do
+      [-5, Float::NAN, Float::INFINITY, -Float::INFINITY, 101].each do |bad_outcome|
+        described_class.register(:action) { |_n, _c, _remaining| bad_outcome }
 
-      expect { described_class.call(:action, node, custody, 0) }
-        .to raise_error(Custodian::Core::ActionRegistry::InvalidOutcomeError, /-5/)
+        expect { described_class.call(:action, node, custody, 100) }
+          .to raise_error(Custodian::Core::ActionRegistry::InvalidOutcomeError, /#{Regexp.escape(bad_outcome.inspect)}/)
+
+        described_class.unregister(:action)
+      end
     end
   end
 

@@ -28,7 +28,7 @@ module Custodian
           raise NotRegisteredError, "action #{name.inspect} is not registered" unless block
 
           outcome = block.call(node, custody, remaining)
-          validate_outcome!(name, outcome)
+          validate_outcome!(name, outcome, remaining: remaining)
           outcome
         end
 
@@ -55,22 +55,44 @@ module Custodian
         # hook) can validate an outcome using the exact same rule that
         # governs actions invoked through #call: :resolved, :failed, or a
         # non-negative Numeric.
-        def validate_outcome!(name, outcome)
+        def validate_outcome!(name, outcome, remaining: nil)
           return if VALID_SYMBOL_OUTCOMES.include?(outcome)
 
-          if outcome.is_a?(Numeric)
-            # An action must not INCREASE demand: a negative Numeric would mean
-            # partial resolution made things worse, which is never valid.
-            return if outcome >= 0
-
-            raise InvalidOutcomeError,
-                  "action #{name.inspect} returned a negative Numeric outcome: #{outcome.inspect} " \
-                  "(an action must not increase demand; Numeric outcomes must be >= 0)"
-          end
+          validate_numeric_outcome!(name, outcome, remaining) if outcome.is_a?(Numeric)
+          return if outcome.is_a?(Numeric)
 
           raise InvalidOutcomeError,
                 "action #{name.inspect} returned an invalid outcome: #{outcome.inspect} " \
                 "(expected :resolved, :failed, or a Numeric)"
+        end
+
+        private
+
+        def validate_numeric_outcome!(name, outcome, remaining)
+          validate_finite_outcome!(name, outcome)
+          validate_non_negative_outcome!(name, outcome)
+          return if remaining.nil? || outcome <= remaining
+
+          raise InvalidOutcomeError,
+                "action #{name.inspect} returned #{outcome.inspect}, exceeding remaining demand #{remaining.inspect}"
+        rescue ArgumentError, NoMethodError
+          raise InvalidOutcomeError,
+                "action #{name.inspect} returned an incompatible Numeric outcome: #{outcome.inspect}"
+        end
+
+        def validate_finite_outcome!(name, outcome)
+          return if outcome.finite?
+
+          raise InvalidOutcomeError,
+                "action #{name.inspect} returned a non-finite Numeric outcome: #{outcome.inspect}"
+        end
+
+        def validate_non_negative_outcome!(name, outcome)
+          return if outcome >= 0
+
+          raise InvalidOutcomeError,
+                "action #{name.inspect} returned a negative Numeric outcome: #{outcome.inspect} " \
+                "(an action must not increase demand; Numeric outcomes must be >= 0)"
         end
       end
     end

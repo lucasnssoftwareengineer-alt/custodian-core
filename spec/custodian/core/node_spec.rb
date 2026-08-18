@@ -27,6 +27,13 @@ RSpec.describe Custodian::Core::Node do
       expect(node).not_to be_valid
       expect(node.errors[:demand_value]).not_to be_empty
     end
+
+    it "is invalid when a numeric demand_value is negative" do
+      node = described_class.new(demand_type: "fixed", demand_value: -1)
+
+      expect(node).not_to be_valid
+      expect(node.errors[:demand_value]).not_to be_empty
+    end
   end
 
   describe "ancestry" do

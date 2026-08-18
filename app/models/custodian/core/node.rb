@@ -14,6 +14,7 @@ module Custodian
       DEMAND_TYPES = %w[binary fixed variable_manual variable_by_tag].freeze
 
       validates :demand_type, presence: true, inclusion: { in: DEMAND_TYPES }
+      validates :demand_value, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
       validate :demand_value_matches_demand_type
 
       # Node deliberately has no graph_id column: graph membership is resolved

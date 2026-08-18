@@ -252,7 +252,7 @@ module Custodian
         def run_phases(node, remaining, context, attempts)
           @phases.each do |phase|
             outcome = phase[:handler].call(node, remaining, context)
-            ActionRegistry.validate_outcome!(phase[:name], outcome)
+            ActionRegistry.validate_outcome!(phase[:name], outcome, remaining: remaining)
             attempts << { custody_id: nil, action_name: phase[:name], outcome: outcome, via: :phase }
 
             done = yield(outcome)
