@@ -5,24 +5,31 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   rubocop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           ruby-version: "3.2"
           bundler-cache: true
+
       - name: Run RuboCop
         run: bundle exec rubocop
 
   rspec:
     name: RSpec (Ruby ${{ matrix.ruby }}, Rails ${{ matrix.rails }}, ancestry ${{ matrix.ancestry }})
     runs-on: ubuntu-latest
+
     env:
       ANCESTRY_VERSION: ${{ matrix.ancestry }}
       RAILS_VERSION: ${{ matrix.rails }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,14 +37,18 @@ jobs:
           - ruby: "3.2"
             rails: "~> 7.0"
             ancestry: "~> 4.0"
+
           - ruby: "3.4"
             rails: "~> 8.0"
             ancestry: "~> 5.0"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+
       - name: Run RSpec
         run: bundle exec rspec
