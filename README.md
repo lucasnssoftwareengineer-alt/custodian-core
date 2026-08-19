@@ -165,17 +165,16 @@ Planned extensions that do not exist in this gem yet:
 `ancestry` 4.x and 5.x. The lower Ruby bound keeps the supported runtime
 aligned with the CI matrix and with the currently supported Rails majors.
 
-This gem is not published to RubyGems yet. While it lives on GitHub only,
-add it to your host Rails application's Gemfile via git:
+Add the gem to your host Rails application's Gemfile:
 
 ```ruby
-gem "custodian-core", git: "https://github.com/lucasnssoftwareengineer-alt/custodian-core"
+gem "custodian-core", "~> 0.1.1"
 ```
 
-Once it is published to RubyGems, this becomes simply:
+Then install it:
 
-```ruby
-gem "custodian-core"
+```sh
+bundle install
 ```
 
 Then install the engine's migrations:
