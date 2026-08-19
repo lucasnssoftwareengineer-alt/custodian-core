@@ -1,0 +1,93 @@
+name: Release Gem
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, e.g. v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish gem
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - name: Checkout requested tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag format
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ inputs.tag }}"
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $TAG"
+            exit 1
+          fi
+
+      - name: Verify tag exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse "refs/tags/${{ inputs.tag }}" >/dev/null
+
+      - name: Verify tagged commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin main --depth=1
+
+          TAG_COMMIT="$(git rev-list -n 1 "${{ inputs.tag }}")"
+
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+            echo "Refusing release: tagged commit is not contained in origin/main."
+            exit 1
+          fi
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Verify version matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_VERSION="${{ inputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+
+          GEM_VERSION="$(ruby -Ilib -r custodian/core/version -e 'print Custodian::Core::VERSION')"
+
+          echo "Tag version: $TAG_VERSION"
+          echo "Gem version: $GEM_VERSION"
+
+          if [ "$TAG_VERSION" != "$GEM_VERSION" ]; then
+            echo "Refusing release: tag and gem version differ."
+            exit 1
+          fi
+
+      - name: Run tests
+        run: bundle exec rspec
+
+      - name: Run RuboCop
+        run: bundle exec rubocop
+
+      - name: Build gem
+        run: gem build custodian-core.gemspec
+
+      - name: Publish to RubyGems
+        uses: rubygems/release-gem@v1
