@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -18,9 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout requested tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
@@ -57,7 +60,7 @@ jobs:
             exit 1
           fi
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
@@ -90,4 +93,4 @@ jobs:
         run: gem build custodian-core.gemspec
 
       - name: Publish to RubyGems
-        uses: rubygems/release-gem@v1
+        uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1
