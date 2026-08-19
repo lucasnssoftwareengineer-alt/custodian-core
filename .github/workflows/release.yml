@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch origin main --depth=1
+          git fetch origin main
 
           TAG_COMMIT="$(git rev-list -n 1 "${{ inputs.tag }}")"
 
