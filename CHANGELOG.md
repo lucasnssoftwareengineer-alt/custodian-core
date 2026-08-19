@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-19
+
+### Security and release hardening
+
 - Require Ruby 3.2+, support Rails 7.x/8.x and ancestry 4.x/5.x explicitly.
 - Reject negative demands and non-finite, negative, or over-remaining numeric
   action outcomes.
@@ -7,6 +11,20 @@
   traverse deep trees iteratively.
 - Limit the built gem to consumer-facing code, migrations, signatures, and
   top-level release documentation.
+- Add repository-wide CODEOWNERS coverage.
+- Default GitHub Actions permissions to read-only and restrict `id-token: write`
+  to the publication job.
+- Pin GitHub Actions to full commit SHAs and configure Dependabot updates for
+  GitHub Actions.
+- Strengthen protection of the `main` and `dev` branches.
+- Publish through GitHub Actions Trusted Publishing and RubyGems OIDC.
+
+### Release pipeline fixes
+
+- Correct release-tag ancestry validation by fetching the complete history and
+  checking that the tagged commit belongs to `main`.
+- Use Ruby 3.4 for releases to avoid the publication conflict observed with
+  Ruby 3.2.
 
 ## [0.1.0] - 2026-07-07
 
